@@ -69,7 +69,7 @@ I 24 distributori che non comparivano sulla mappa non sono più un limite: erano
 
 ## Architettura: 100% on-device
 
-Il progetto nasceva con un backend Python/FastAPI sul PC, raggiunto dal telefono via LAN. È stato **interamente eliminato**: acquisizione dati e geocoding girano sul device.
+Non c'è nessun server da tenere acceso: acquisizione dati e geocoding girano sul telefono.
 
 ```
 ┌──────────────────────── ANDROID ─────────────────────────┐
@@ -105,7 +105,7 @@ Le **uniche** destinazioni di rete sono queste, tutte pubbliche e in HTTPS:
 | `nominatim.openstreetmap.org` | **solo** per i distributori che aggiungi a mano |
 | `tile.openstreetmap.org` | tile della mappa, con cache su disco in `cacheDir` |
 
-C'è inoltre un intent verso Google Maps per avviare la navigazione, che non è una chiamata dati dell'app. Nessun localhost, nessun `adb reverse`, nessuna LAN, nessun server da avviare.
+C'è inoltre un intent verso Google Maps per avviare la navigazione, che non è una chiamata dati dell'app.
 
 ## Come funziona il refresh
 
@@ -222,9 +222,9 @@ Convenzione sugli id, che determina cosa sopravvive a un refresh:
 
 ## Limiti noti
 
-- **Serve Internet** per aggiornare. Senza connessione l'app mostra l'ultimo dato reale salvato: è indipendente dal PC, non dalla rete. Verificato sul device con entrambe le fonti irraggiungibili: le 426 righe in Room restano identiche byte per byte, compare il messaggio d'errore esplicito e il timestamp dell'ultimo aggiornamento **non** viene toccato, così il tentativo si ripete al riavvio invece di aspettare i 15 minuti di cache.
+- **Serve Internet** per aggiornare. Senza connessione l'app mostra l'ultimo dato reale salvato. Verificato sul device con entrambe le fonti irraggiungibili: le 426 righe in Room restano identiche byte per byte, compare il messaggio d'errore esplicito e il timestamp dell'ultimo aggiornamento **non** viene toccato, così il tentativo si ripete al riavvio invece di aspettare i 15 minuti di cache.
 - **`ospzApi` non è un'API con termini d'uso pubblicati**: è il backend del sito dell'Osservaprezzi e può cambiare senza preavviso. È esattamente la ragione del fallback sugli open data, che sono invece una pubblicazione ufficiale e documentata.
-- **Segnalazioni prezzo e distributori aggiunti sono locali al device**, non condivisi con altri utenti. Il backend centrale che li condivideva è stato rimosso.
+- **Segnalazioni prezzo e distributori aggiunti sono locali al device**, non condivisi con altri utenti.
 - I prezzi sono quelli **comunicati dai gestori** al ministero, con la data di comunicazione mostrata in app. Un gestore che non aggiorna resta pubblicato con la sua data vecchia.
 - L'app mostra **solo il GPL**, per scelta, anche se la fonte fornisce tutti i carburanti.
 
