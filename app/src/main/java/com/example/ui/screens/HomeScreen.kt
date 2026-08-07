@@ -1,0 +1,611 @@
+package com.example.ui.screens
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.LocationCity
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.LocalGasStation
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.ViewList
+import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.ui.components.AddStationDialog
+import com.example.ui.components.CityFilterDialog
+import com.example.ui.components.ConnectionSettingsDialog
+import com.example.ui.components.GplCalculatorSheet
+import com.example.ui.components.GplStationCard
+import com.example.ui.components.InteractiveMapView
+import com.example.ui.components.PriceReportDialog
+import com.example.ui.components.StationDetailDialog
+import com.example.ui.theme.EcoGreenPrimary
+import com.example.ui.theme.FlameOrange
+import com.example.ui.theme.SorrentoBlue
+import com.example.ui.viewmodel.GplUiState
+import com.example.ui.viewmodel.GplViewModel
+import com.example.ui.viewmodel.SortMode
+
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.TrendingDown
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HomeScreen(
+    viewModel: GplViewModel,
+    modifier: Modifier = Modifier,
+    onRequestLocationRefresh: () -> Unit = {}
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+
+    val citiesList = listOf(
+        "Tutti",
+        "Avellino",
+        "Benevento",
+        "Caserta",
+        "Napoli",
+        "Salerno",
+        "Penisola Sorrentina",
+        "Sorrento",
+        "Piano di Sorrento",
+        "Pozzuoli",
+        "Acerra"
+    )
+
+    val brandsList = listOf(
+        "Tutti", "Eni", "IP", "Beyfin", "Q8", "Pompe Bianche", "Tamoil"
+    )
+
+    Scaffold(
+        modifier = modifier.testTag("home_screen_scaffold"),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.LocalGasStation,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "GPL Campania",
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                fontSize = 18.sp
+                            )
+                        }
+                        val liveAvg = if (uiState.stations.isNotEmpty()) uiState.stations.map { it.gplPrice }.average() else 0.0
+                        val liveCount = uiState.stations.size
+                        Text(
+                            text = if (liveCount > 0) "$liveCount impianti • Media € ${String.format("%.3f", liveAvg)}/L" else "Backend GPL Campania (LAN)",
+                            fontSize = 11.sp,
+                            color = Color.White.copy(alpha = 0.85f)
+                        )
+                    }
+                },
+                actions = {
+                    // Backend Sync Button
+                    if (uiState.isScrapingLoading) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier
+                                .size(24.dp)
+                                .padding(end = 8.dp)
+                        )
+                    } else {
+                        IconButton(
+                            onClick = { viewModel.refreshStations() },
+                            modifier = Modifier.testTag("refresh_official_data_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.CloudDownload,
+                                contentDescription = "Aggiorna dal backend",
+                                tint = Color.White
+                            )
+                        }
+                    }
+
+                    // Connection Settings Button
+                    IconButton(
+                        onClick = { viewModel.openConnectionSettings() },
+                        modifier = Modifier.testTag("connection_settings_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = "Impostazioni connessione",
+                            tint = Color.White
+                        )
+                    }
+
+                    // View Toggle (Map / List)
+                    IconButton(
+                        onClick = { viewModel.toggleMapView() },
+                        modifier = Modifier.testTag("view_toggle_button")
+                    ) {
+                        Icon(
+                            imageVector = if (uiState.isMapView) Icons.Filled.ViewList else Icons.Filled.Map,
+                            contentDescription = "Cambia Vista",
+                            tint = Color.White
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = EcoGreenPrimary)
+            )
+        },
+        floatingActionButton = {
+            Column(horizontalAlignment = Alignment.End) {
+                // Calculator FAB
+                FloatingActionButton(
+                    onClick = { viewModel.setCalculatorOpen(true) },
+                    containerColor = FlameOrange,
+                    contentColor = Color.White,
+                    modifier = Modifier
+                        .padding(bottom = 12.dp)
+                        .testTag("open_calculator_fab")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Filled.Calculate, contentDescription = "Calcolatore")
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Calcola Risparmio", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+
+                // Add Station FAB
+                FloatingActionButton(
+                    onClick = { viewModel.setAddStationOpen(true) },
+                    containerColor = EcoGreenPrimary,
+                    contentColor = Color.White,
+                    modifier = Modifier.testTag("add_station_fab")
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = "Aggiungi Distributore")
+                }
+            }
+        }
+    ) { innerPadding ->
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            // Scraping Status Banner
+            AnimatedVisibility(visible = uiState.statusMessage != null) {
+                uiState.statusMessage?.let { msg ->
+                    Surface(
+                        color = SorrentoBlue,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = msg,
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = { viewModel.clearStatusMessage() },
+                                modifier = Modifier.size(20.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Clear,
+                                    contentDescription = "Chiudi",
+                                    tint = Color.White
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Search & Filter Header Bar
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(EcoGreenPrimary)
+                    .padding(horizontal = 16.dp, vertical = 14.dp)
+            ) {
+                // Search Input Box
+                OutlinedTextField(
+                    value = uiState.searchQuery,
+                    onValueChange = { viewModel.setSearchQuery(it) },
+                    placeholder = { Text("Cerca distributore, città o via...", color = Color.Gray, fontSize = 13.sp) },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = "Cerca", tint = EcoGreenPrimary) },
+                    trailingIcon = {
+                        if (uiState.searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                                Icon(Icons.Filled.Clear, contentDescription = "Pulisci", tint = Color.Gray)
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(24.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White,
+                        focusedBorderColor = Color.Transparent,
+                        unfocusedBorderColor = Color.Transparent
+                    ),
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .testTag("search_station_input")
+                )
+
+                // Feedback immediato: rende visibile che la ricerca sta davvero filtrando la lista
+                if (uiState.searchQuery.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = if (uiState.stations.isEmpty())
+                            "Nessun distributore trovato per \"${uiState.searchQuery}\""
+                        else
+                            "${uiState.stations.size} risultat${if (uiState.stations.size == 1) "o" else "i"} per \"${uiState.searchQuery}\"",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.testTag("search_result_count")
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Pulsante compatto che apre la lista filtrabile di comuni (prima: riga orizzontale
+                // con una chip per ognuno dei comuni rilevati, troppo lunga da scorrere).
+                Surface(
+                    onClick = { viewModel.openCityFilter() },
+                    shape = RoundedCornerShape(24.dp),
+                    color = Color.White.copy(alpha = 0.2f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("open_city_filter")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Filled.LocationCity, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Text(uiState.selectedCity, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        Icon(Icons.Filled.ArrowDropDown, contentDescription = "Cambia luogo", tint = Color.White)
+                    }
+                }
+            }
+
+            // Dedicated Primary Sort Tabs Bar: "Ordinate per Prezzo" & "Ordinate per Distanza"
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Sort: Price ASC (Cheapest)
+                    FilterChip(
+                        selected = uiState.sortMode == SortMode.PRICE_ASC,
+                        onClick = { viewModel.setSortMode(SortMode.PRICE_ASC) },
+                        leadingIcon = { Icon(Icons.Filled.TrendingDown, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                        label = { Text("Più economici", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = FlameOrange,
+                            selectedLabelColor = Color.White,
+                            selectedLeadingIconColor = Color.White
+                        ),
+                        modifier = Modifier.testTag("sort_price_chip")
+                    )
+
+                    // Sort: Distance
+                    FilterChip(
+                        selected = uiState.sortMode == SortMode.DISTANCE,
+                        onClick = { viewModel.setSortMode(SortMode.DISTANCE) },
+                        leadingIcon = { Icon(Icons.Filled.LocationOn, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                        label = { Text("Più vicini", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = SorrentoBlue,
+                            selectedLabelColor = Color.White,
+                            selectedLeadingIconColor = Color.White
+                        ),
+                        modifier = Modifier.testTag("sort_distance_chip")
+                    )
+
+                    // Sort: Brand
+                    FilterChip(
+                        selected = uiState.sortMode == SortMode.BRAND,
+                        onClick = { viewModel.setSortMode(SortMode.BRAND) },
+                        label = { Text("Marchio", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) },
+                        modifier = Modifier.testTag("sort_brand_chip")
+                    )
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    // Favorites Only Toggle Chip
+                    FilterChip(
+                        selected = uiState.filterFavoritesOnly,
+                        onClick = { viewModel.setFavoritesOnly(!uiState.filterFavoritesOnly) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = if (uiState.filterFavoritesOnly) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        },
+                        label = { Text("Preferiti", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = EcoGreenPrimary,
+                            selectedLabelColor = Color.White,
+                            selectedLeadingIconColor = Color.White
+                        ),
+                        modifier = Modifier.testTag("filter_favorites_chip")
+                    )
+                }
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+
+            // Main Content Body (List or Map)
+            if (uiState.isMapView) {
+                InteractiveMapView(
+                    stations = uiState.stations,
+                    userLat = uiState.userLat,
+                    userLng = uiState.userLng,
+                    selectedStation = uiState.selectedStationForDetail,
+                    onStationSelect = { viewModel.setSelectedStation(it) },
+                    onDirectionsClick = { viewModel.launchGoogleMapsDirections(context, it) }
+                )
+            } else {
+                // List View
+                if (uiState.stations.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Filled.LocalGasStation,
+                                contentDescription = null,
+                                tint = Color.Gray,
+                                modifier = Modifier.size(64.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Nessun distributore GPL trovato con i filtri selezionati.",
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.Gray
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .testTag("stations_lazy_list"),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // ── TOP 5 Cheapest horizontal scroll ───────────────
+                        val allAvgPrice = if (uiState.stations.isNotEmpty()) uiState.stations.map { it.gplPrice }.average() else 0.0
+                        val top5 = uiState.stations.sortedBy { it.gplPrice }.take(5)
+                        if (top5.isNotEmpty()) {
+                            item {
+                                Column {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Filled.TrendingDown, contentDescription = null, tint = FlameOrange, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Top 5 Più Economici", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = FlameOrange)
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    LazyRow(
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        contentPadding = PaddingValues(end = 4.dp)
+                                    ) {
+                                        items(top5, key = { "top5_${it.id}" }) { s ->
+                                            val dist = GplViewModel.calculateDistanceKm(uiState.userLat, uiState.userLng, s.latitude, s.longitude)
+                                            val savPct = if (allAvgPrice > 0 && s.gplPrice < allAvgPrice) ((allAvgPrice - s.gplPrice) / allAvgPrice * 100).toInt() else 0
+                                            Card(
+                                                onClick = { viewModel.setSelectedStation(s) },
+                                                shape = RoundedCornerShape(16.dp),
+                                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                                elevation = CardDefaults.cardElevation(2.dp),
+                                                modifier = Modifier.width(160.dp).testTag("top5_card_${s.id}")
+                                            ) {
+                                                Column(modifier = Modifier.padding(12.dp)) {
+                                                    Text(com.example.ui.components.formatBrandLabel(s.brand), fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = SorrentoBlue, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                                    Spacer(modifier = Modifier.height(3.dp))
+                                                    Text(String.format(java.util.Locale.ITALY, "€ %.3f", s.gplPrice), fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = com.example.ui.theme.PriceBadgeGreen, maxLines = 1)
+                                                    Text("/L GPL", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(s.city, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                                    Text(dist?.let { String.format(java.util.Locale.ITALY, "%.1f km", it) } ?: "distanza n.d.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                                                    if (savPct > 0) {
+                                                        Spacer(modifier = Modifier.height(4.dp))
+                                                        Surface(shape = RoundedCornerShape(6.dp), color = com.example.ui.theme.SavingsBadgeBg) {
+                                                            Text("-$savPct%", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = com.example.ui.theme.SavingsBadgeFg)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // List of Stations
+                        items(
+                            items = uiState.stations,
+                            key = { it.id }
+                        ) { station ->
+                            val dist = GplViewModel.calculateDistanceKm(
+                                uiState.userLat, uiState.userLng,
+                                station.latitude, station.longitude
+                            )
+
+                            GplStationCard(
+                                station = station,
+                                distanceKm = dist,
+                                averagePrice = allAvgPrice,
+                                onCardClick = { viewModel.setSelectedStation(station) },
+                                onFavoriteClick = { viewModel.toggleFavorite(station) },
+                                onDirectionsClick = { viewModel.launchGoogleMapsDirections(context, station) },
+                                onReportPriceClick = { viewModel.setStationToReportPrice(station) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Modal Sheets & Dialogs
+    uiState.selectedStationForDetail?.let { station ->
+        val detailAvg = if (uiState.stations.isNotEmpty()) uiState.stations.map { it.gplPrice }.average() else 0.0
+        StationDetailDialog(
+            station = station,
+            viewModel = viewModel,
+            averagePrice = detailAvg,
+            onDismiss = { viewModel.setSelectedStation(null) },
+            onDirectionsClick = { viewModel.launchGoogleMapsDirections(context, station) },
+            onReportPriceClick = {
+                viewModel.setSelectedStation(null)
+                viewModel.setStationToReportPrice(station)
+            }
+        )
+    }
+
+    uiState.stationToReportPrice?.let { station ->
+        PriceReportDialog(
+            station = station,
+            initialReporterName = uiState.reporterName,
+            onDismiss = { viewModel.setStationToReportPrice(null) },
+            onSubmitPrice = { newPrice, reporter, notes ->
+                viewModel.submitPriceUpdate(station, newPrice, reporter, notes)
+            }
+        )
+    }
+
+    if (uiState.isCalculatorOpen) {
+        GplCalculatorSheet(
+            avgGplPrice = if (uiState.stations.isNotEmpty()) uiState.stations.map { it.gplPrice }.average() else 0.715,
+            onDismiss = { viewModel.setCalculatorOpen(false) }
+        )
+    }
+
+    if (uiState.isAddStationOpen) {
+        AddStationDialog(
+            onDismiss = { viewModel.setAddStationOpen(false) },
+            onAddStation = { provinciaSlug, name, brand, address, city, price, hours, phone, services ->
+                viewModel.addNewStation(provinciaSlug, name, brand, address, city, price, hours, phone, services)
+            }
+        )
+    }
+
+    if (uiState.isCityFilterOpen) {
+        CityFilterDialog(
+            cities = uiState.availableCities.ifEmpty { listOf("Tutti") },
+            selectedCity = uiState.selectedCity,
+            onCitySelected = { city -> viewModel.setSelectedCity(city) },
+            onDismiss = { viewModel.closeCityFilter() }
+        )
+    }
+
+    if (uiState.isConnectionSettingsOpen) {
+        ConnectionSettingsDialog(
+            reporterName = uiState.reporterName,
+            lastRefreshTimestamp = uiState.lastRefreshTimestamp,
+            currentLat = uiState.userLat,
+            currentLng = uiState.userLng,
+            isLocationManual = uiState.isLocationManual,
+            isLocationLoading = uiState.isLocationLoading,
+            onDismiss = { viewModel.closeConnectionSettings() },
+            onSaveReporterName = { name -> viewModel.setReporterName(name) },
+            onRequestLocationRefresh = onRequestLocationRefresh,
+            onForceRefreshBackend = { viewModel.refreshStations(forceRefresh = true) },
+            onSetManualLocation = { lat, lng -> viewModel.setManualLocation(lat, lng) }
+        )
+    }
+}
