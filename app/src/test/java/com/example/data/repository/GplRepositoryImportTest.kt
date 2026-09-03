@@ -88,6 +88,68 @@ class GplRepositoryImportTest {
     }
 
     @Test
+    fun `importMyLpgPoiFormat never invents a price when the source has none`() = runTest {
+        val (repo, dao) = newRepository()
+        // La latitudine 40.6358 contiene "0.635", una sottostringa che il regex di estrazione
+        // prezzo riconoscerebbe come prezzo se la ricerca includesse l'intera riga: verifica anche
+        // che il prezzo non venga letto per sbaglio da un frammento di coordinata.
+        val csv = """
+            Longitude,Latitude,Name,Address
+            14.4082,40.6358,"Eni Sorrento","Via Roma 1"
+        """.trimIndent()
+
+        repo.importMyLpgPoiFormat(csv, isKmlOrXml = false)
+
+        val station = dao.currentStations().single()
+        assertEquals(0.0, station.gplPrice, 0.0001)
+        assertEquals("", station.priceLastUpdated)
+    }
+
+    @Test
+    fun `importMyLpgPoiFormat reimporting the same file replaces rather than duplicates`() = runTest {
+        val (repo, dao) = newRepository()
+        val csv = """
+            Longitude,Latitude,Name,Address
+            14.4082,40.6358,"Eni Sorrento","Via Roma 1"
+        """.trimIndent()
+
+        repo.importMyLpgPoiFormat(csv, isKmlOrXml = false)
+        repo.importMyLpgPoiFormat(csv, isKmlOrXml = false)
+
+        assertEquals(1, dao.currentStations().size)
+    }
+
+    @Test
+    fun `importEcomotoriGplCsv never invents a price and keeps the station as a valid POI`() = runTest {
+        val (repo, dao) = newRepository()
+        val csv = """
+            Longitude,Latitude,Name
+            14.4082,40.6358,"Q8 Sorrento"
+        """.trimIndent()
+
+        repo.importEcomotoriGplCsv(csv)
+
+        val station = dao.currentStations().single()
+        assertEquals("Q8", station.brand)
+        assertEquals(0.0, station.gplPrice, 0.0001)
+        assertEquals("", station.priceLastUpdated)
+    }
+
+    @Test
+    fun `importEcomotoriGplCsv reimporting the same file replaces rather than duplicates`() = runTest {
+        val (repo, dao) = newRepository()
+        val csv = """
+            Longitude,Latitude,Name
+            14.4082,40.6358,"Q8 Sorrento"
+        """.trimIndent()
+
+        repo.importEcomotoriGplCsv(csv)
+        repo.importEcomotoriGplCsv(csv)
+
+        assertEquals(1, dao.currentStations().size)
+    }
+
+    @Test
     fun `toggleFavorite flips favorite status via dao`() = runTest {
         val (repo, dao) = newRepository()
         dao.insertStation(

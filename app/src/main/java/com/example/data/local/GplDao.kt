@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.example.data.model.GplStation
 import com.example.data.model.UserPriceReport
@@ -31,6 +32,14 @@ interface GplDao {
 
     @Query("SELECT COUNT(*) FROM gpl_stations WHERE id LIKE 'gpl\\_%' ESCAPE '\\'")
     suspend fun countBackendSourcedStations(): Int
+
+    /** Sostituisce le stazioni della fonte ufficiale in un'unica transazione: se il processo muore
+     * a metà, o si vede lo stato di prima o quello di dopo, mai una lista svuotata a metà. */
+    @Transaction
+    suspend fun replaceBackendSourcedStations(stations: List<GplStation>) {
+        deleteBackendSourcedStations()
+        insertStations(stations)
+    }
 
     @Query("SELECT id FROM gpl_stations WHERE isFavorite = 1")
     suspend fun getFavoriteStationIds(): List<String>

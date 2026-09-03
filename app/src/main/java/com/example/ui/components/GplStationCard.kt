@@ -203,10 +203,14 @@ fun GplStationCard(
                     .padding(end = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                val hasRealPrice = station.gplPrice > 0.0
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = PriceBadgeBg,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, PriceBadgeBorder)
+                    color = if (hasRealPrice) PriceBadgeBg else MaterialTheme.colorScheme.surfaceVariant,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (hasRealPrice) PriceBadgeBorder else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                    )
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
@@ -215,24 +219,26 @@ fun GplStationCard(
                         Icon(
                             imageVector = Icons.Filled.LocalGasStation,
                             contentDescription = "GPL",
-                            tint = PriceBadgeGreen,
+                            tint = if (hasRealPrice) PriceBadgeGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = String.format(Locale.ITALY, "€ %.3f", station.gplPrice),
+                            text = if (hasRealPrice) String.format(Locale.ITALY, "€ %.3f", station.gplPrice) else "N/D",
                             fontSize = 20.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = PriceBadgeGreen,
+                            color = if (hasRealPrice) PriceBadgeGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1
                         )
-                        Text(
-                            text = "/L",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = PriceBadgeGreen,
-                            modifier = Modifier.padding(start = 2.dp, bottom = 1.dp)
-                        )
+                        if (hasRealPrice) {
+                            Text(
+                                text = "/L",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = PriceBadgeGreen,
+                                modifier = Modifier.padding(start = 2.dp, bottom = 1.dp)
+                            )
+                        }
                     }
                 }
 
@@ -269,25 +275,26 @@ fun GplStationCard(
 
                     // Stato apertura: solo se davvero noto (i dati ufficiali non lo forniscono).
                     station.isOpenNow?.let { isOpen ->
+                        val statusColor = if (isOpen) PriceBadgeGreen else MaterialTheme.colorScheme.error
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .clip(CircleShape)
-                                .background(if (isOpen) Color(0xFFDCFCE7) else Color(0xFFFEE2E2))
+                                .background(statusColor.copy(alpha = 0.12f))
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Box(
                                 modifier = Modifier
                                     .size(6.dp)
                                     .clip(CircleShape)
-                                    .background(if (isOpen) Color(0xFF16A34A) else Color(0xFFDC2626))
+                                    .background(statusColor)
                             )
                             Spacer(modifier = Modifier.width(5.dp))
                             Text(
                                 text = if (isOpen) "Aperto" else "Chiuso",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isOpen) Color(0xFF15803D) else Color(0xFFB91C1C)
+                                color = statusColor
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))

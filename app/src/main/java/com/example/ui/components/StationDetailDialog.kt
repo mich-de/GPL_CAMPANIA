@@ -65,6 +65,9 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.GplStation
 import com.example.ui.theme.EcoGreenPrimary
 import com.example.ui.theme.FlameOrange
+import com.example.ui.theme.PriceBadgeBg
+import com.example.ui.theme.PriceBadgeBorder
+import com.example.ui.theme.PriceBadgeGreen
 import com.example.ui.theme.SavingsBadgeBg
 import com.example.ui.theme.SavingsBadgeFg
 import com.example.ui.theme.SorrentoBlue
@@ -137,26 +140,27 @@ fun StationDetailDialog(
                             }
                             // Open / Closed pill — mostrato solo se lo stato è realmente noto
                             station.isOpenNow?.let { isOpen ->
+                                val statusColor = if (isOpen) PriceBadgeGreen else MaterialTheme.colorScheme.error
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier
                                         .clip(CircleShape)
-                                        .background(if (isOpen) Color(0xFFDCFCE7) else Color(0xFFFEE2E2))
+                                        .background(statusColor.copy(alpha = 0.12f))
                                         .padding(horizontal = 10.dp, vertical = 4.dp)
                                 ) {
                                     Box(
                                         modifier = Modifier
                                             .size(6.dp)
                                             .clip(CircleShape)
-                                            .background(if (isOpen) Color(0xFF16A34A) else Color(0xFFDC2626))
+                                            .background(statusColor)
                                     )
                                     Spacer(modifier = Modifier.width(5.dp))
                                     Text(
                                         text = if (isOpen) "Aperto Ora" else "Chiuso",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (isOpen) Color(0xFF15803D) else Color(0xFFB91C1C)
+                                        color = statusColor
                                     )
                                 }
                             }
@@ -229,11 +233,15 @@ fun StationDetailDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // GPL — main hero
+                    val hasRealPrice = station.gplPrice > 0.0
                     Surface(
                         modifier = Modifier.weight(1.4f),
                         shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFFE8F5E9),
-                        border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFA5D6A7))
+                        color = if (hasRealPrice) PriceBadgeBg else MaterialTheme.colorScheme.surfaceVariant,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.5.dp,
+                            if (hasRealPrice) PriceBadgeBorder else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                        )
                     ) {
                         Column(
                             modifier = Modifier.padding(12.dp),
@@ -242,17 +250,24 @@ fun StationDetailDialog(
                             Icon(
                                 imageVector = Icons.Filled.LocalGasStation,
                                 contentDescription = null,
-                                tint = Color(0xFF1B5E20),
+                                tint = if (hasRealPrice) PriceBadgeGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(22.dp)
                             )
-                            Text("GPL", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1B5E20))
                             Text(
-                                text = "€ ${String.format("%.3f", station.gplPrice)}",
+                                "GPL",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (hasRealPrice) PriceBadgeGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = if (hasRealPrice) "€ ${String.format("%.3f", station.gplPrice)}" else "N/D",
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFF1B5E20)
+                                color = if (hasRealPrice) PriceBadgeGreen else MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Text("/L", fontSize = 10.sp, color = Color(0xFF2E7D32))
+                            if (hasRealPrice) {
+                                Text("/L", fontSize = 10.sp, color = PriceBadgeGreen)
+                            }
                         }
                     }
 
@@ -339,13 +354,15 @@ fun StationDetailDialog(
                     }
                 }
 
-                // ── Update timestamp ──────────────────────────────────────────
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Ultimo aggiornamento: ${station.priceLastUpdated}",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                // ── Update timestamp — solo se la fonte ne ha comunicato una reale ──
+                if (station.priceLastUpdated.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Ultimo aggiornamento: ${station.priceLastUpdated}",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), thickness = 0.5.dp)
 
@@ -422,7 +439,7 @@ fun StationDetailDialog(
                         }
                         if (station.isOpening24h == true) {
                             Spacer(modifier = Modifier.height(6.dp))
-                            Surface(shape = CircleShape, color = Color(0xFF1B5E20)) {
+                            Surface(shape = CircleShape, color = PriceBadgeGreen) {
                                 Text(
                                     "✓ Aperto 24h",
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
@@ -445,7 +462,7 @@ fun StationDetailDialog(
                         station.services.split(",").map { it.trim() }.filter { it.isNotEmpty() && !it.contains(Regex("\\d\\.\\d")) }.forEach { service ->
                             Surface(
                                 shape = CircleShape,
-                                color = Color(0xFFE2F1E7),
+                                color = EcoGreenPrimary.copy(alpha = 0.12f),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, EcoGreenPrimary.copy(alpha = 0.3f))
                             ) {
                                 Text(

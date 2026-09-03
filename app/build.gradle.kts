@@ -10,11 +10,11 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.gplcampania.penisola"
+    applicationId = "it.michdeangelis.gplcampania"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0.0"
+    versionCode = 2
+    versionName = "1.1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -74,7 +74,6 @@ dependencies {
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.okhttp)                              // API/CSV Osservaprezzi MIMIT + chiamate Nominatim
-  implementation(libs.play.services.location)              // fix GPS reale del device
   implementation("org.osmdroid:osmdroid-android:6.1.20")   // mappa OpenStreetMap offline-friendly
 
   testImplementation(libs.androidx.compose.ui.test.junit4)

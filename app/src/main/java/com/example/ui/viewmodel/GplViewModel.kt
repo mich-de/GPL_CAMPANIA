@@ -3,6 +3,7 @@ package com.example.ui.viewmodel
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -250,6 +251,7 @@ class GplViewModel(
                     statusMessage = e.message
                 )
             } catch (e: Exception) {
+                Log.w(TAG, "Errore imprevisto durante l'aggiornamento distributori", e)
                 _uiDialogState.value = _uiDialogState.value.copy(
                     isScrapingLoading = false,
                     statusMessage = "Errore imprevisto durante l'aggiornamento: ${e.message}"
@@ -331,6 +333,7 @@ class GplViewModel(
             val outcome = try {
                 italiaRepository.refreshNationalStats(force = force, todayKey = todayKey)
             } catch (e: Exception) {
+                Log.w(TAG, "Errore durante l'aggiornamento delle statistiche nazionali", e)
                 GplItaliaRepository.StatsOutcome.UNAVAILABLE
             }
             val data = italiaRepository.cached()
@@ -359,6 +362,7 @@ class GplViewModel(
             val reachable = try {
                 italiaRepository.refreshNews()
             } catch (e: Exception) {
+                Log.w(TAG, "Errore durante l'aggiornamento del feed notizie", e)
                 false
             }
             val data = italiaRepository.cached()
@@ -478,6 +482,7 @@ class GplViewModel(
                     statusMessage = "Prezzo aggiornato sul dispositivo."
                 )
             } catch (e: Exception) {
+                Log.w(TAG, "Errore durante il salvataggio della segnalazione prezzo", e)
                 _uiDialogState.value = _uiDialogState.value.copy(statusMessage = "Errore durante il salvataggio: ${e.message}")
             }
         }
@@ -501,6 +506,7 @@ class GplViewModel(
                     statusMessage = "Distributore aggiunto (posizione verificata da OpenStreetMap)."
                 )
             } catch (e: Exception) {
+                Log.w(TAG, "Errore durante il salvataggio del nuovo distributore", e)
                 _uiDialogState.value = _uiDialogState.value.copy(statusMessage = "Errore durante il salvataggio: ${e.message}")
             }
         }
@@ -529,6 +535,8 @@ class GplViewModel(
 
 
     companion object {
+        private const val TAG = "GplViewModel"
+
         fun computeAvailableCities(stations: List<GplStation>): List<String> {
             val detectedCities = stations.map { it.city }.filter { it.isNotBlank() }.distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)
             val predefinedList = listOf("Tutti", "Napoli (Provincia)", "Salerno (Provincia)", "Caserta (Provincia)", "Avellino (Provincia)", "Benevento (Provincia)", "Penisola Sorrentina")
@@ -563,10 +571,12 @@ class GplViewModel(
             return when (filters.sortMode) {
                 // Stazioni senza coordinate reali (geocoding non riuscito) vanno in coda, mai una distanza inventata.
                 SortMode.DISTANCE -> filtered.sortedBy { calculateDistanceKm(userLat, userLng, it.latitude, it.longitude) ?: Double.MAX_VALUE }
-                SortMode.PRICE_ASC -> filtered.sortedBy { it.gplPrice }
+                // Stessa idea per il prezzo: gplPrice <= 0.0 significa "sconosciuto" (import POI senza
+                // prezzo reale, es. Ecomotori/myLPG), mai il distributore più economico in classifica.
+                SortMode.PRICE_ASC -> filtered.sortedBy { if (it.gplPrice > 0.0) it.gplPrice else Double.MAX_VALUE }
                 // A parità di marchio il criterio utile resta il prezzo: dentro "Q8" vuoi comunque
                 // vedere per primo il distributore che costa meno.
-                SortMode.BRAND -> filtered.sortedWith(compareBy(italianOrder(), GplStation::brand).thenBy { it.gplPrice })
+                SortMode.BRAND -> filtered.sortedWith(compareBy(italianOrder(), GplStation::brand).thenBy { if (it.gplPrice > 0.0) it.gplPrice else Double.MAX_VALUE })
                 SortMode.NAME -> filtered.sortedWith(compareBy(italianOrder(), GplStation::name))
             }
         }

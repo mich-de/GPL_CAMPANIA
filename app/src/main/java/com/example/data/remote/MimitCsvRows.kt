@@ -16,6 +16,11 @@ internal const val CSV_DELIMITER = '|'
 /** Colonna presente in entrambi i file: è anche il marcatore della riga di intestazione. */
 internal const val CSV_ID_COLUMN = "idImpianto"
 
+/** BOM UTF-8: se presente, sta solo in testa alla primissima riga del file, ma toglierlo da ogni
+ * riga costa nulla ed evita che un file con BOM faccia fallire silenziosamente il riconoscimento
+ * dell'intestazione (nessuna riga letta, nessun errore esplicito). */
+private val UTF8_BOM = 0xFEFF.toChar().toString()
+
 internal inline fun forEachCsvRow(
     reader: BufferedReader,
     onRow: (columns: List<String>, header: Map<String, Int>) -> Unit
@@ -23,15 +28,16 @@ internal inline fun forEachCsvRow(
     var header: Map<String, Int>? = null
     var line = reader.readLine()
     while (line != null) {
+        val cleaned = line.removePrefix(UTF8_BOM)
         val current = header
         if (current == null) {
-            if (line.startsWith(CSV_ID_COLUMN)) {
-                header = line.split(CSV_DELIMITER)
+            if (cleaned.startsWith(CSV_ID_COLUMN)) {
+                header = cleaned.split(CSV_DELIMITER)
                     .withIndex()
                     .associate { (index, name) -> name.trim() to index }
             }
-        } else if (line.isNotBlank()) {
-            onRow(line.split(CSV_DELIMITER), current)
+        } else if (cleaned.isNotBlank()) {
+            onRow(cleaned.split(CSV_DELIMITER), current)
         }
         line = reader.readLine()
     }

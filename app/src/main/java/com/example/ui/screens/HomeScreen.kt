@@ -83,15 +83,22 @@ import com.example.ui.viewmodel.SortMode
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -105,6 +112,19 @@ fun HomeScreen(
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+    var isBrandFilterOpen by remember { mutableStateOf(false) }
+    // Attivato solo quando l'utente invia una segnalazione di prezzo: evita che il primo
+    // statusMessage generico (es. quello del refresh automatico all'avvio) faccia comparire
+    // uno snackbar fuori contesto.
+    var awaitingPriceReportFeedback by remember { mutableStateOf(false) }
+
+    LaunchedEffect(uiState.statusMessage) {
+        val message = uiState.statusMessage
+        if (awaitingPriceReportFeedback && message != null) {
+            awaitingPriceReportFeedback = false
+            snackbarHostState.showSnackbar(message)
+        }
+    }
 
     // A tutto schermo il tasto indietro riporta all'elenco invece di chiudere l'app; se c'è una
     // scheda aperta, il primo indietro chiude quella. Il secondo handler è registrato dopo perché
@@ -157,10 +177,16 @@ fun HomeScreen(
                                 fontSize = 18.sp
                             )
                         }
-                        val liveAvg = if (uiState.stations.isNotEmpty()) uiState.stations.map { it.gplPrice }.average() else 0.0
+                        // Solo stazioni con un prezzo reale entrano nella media: quelle importate da
+                        // POI senza prezzo (gplPrice = 0.0) non devono abbassarla artificialmente.
+                        val pricedStations = uiState.stations.filter { it.gplPrice > 0.0 }
+                        val liveAvg = if (pricedStations.isNotEmpty()) pricedStations.map { it.gplPrice }.average() else 0.0
                         val liveCount = uiState.stations.size
+                        val lastRefreshText = uiState.lastRefreshTimestamp?.let { ts ->
+                            "Aggiornato alle " + java.text.SimpleDateFormat("HH:mm", java.util.Locale.ITALY).format(java.util.Date(ts))
+                        } ?: "Dati salvati sul dispositivo"
                         Text(
-                            text = if (liveCount > 0) "$liveCount impianti • Media € ${String.format("%.3f", liveAvg)}/L" else "Backend GPL Campania (LAN)",
+                            text = if (liveCount > 0) "$liveCount impianti • Media € ${String.format("%.3f", liveAvg)}/L" else lastRefreshText,
                             fontSize = 11.sp,
                             color = Color.White.copy(alpha = 0.85f)
                         )
@@ -377,25 +403,53 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Pulsante compatto che apre la lista filtrabile di comuni (prima: riga orizzontale
-                // con una chip per ognuno dei comuni rilevati, troppo lunga da scorrere).
-                Surface(
-                    onClick = { viewModel.openCityFilter() },
-                    shape = RoundedCornerShape(24.dp),
-                    color = Color.White.copy(alpha = 0.2f),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("open_city_filter")
+                // con una chip per ognuno dei comuni rilevati, troppo lunga da scorrere), affiancato
+                // dal filtro marchio — che prima esisteva solo nel ViewModel, senza alcun modo per
+                // raggiungerlo dall'interfaccia.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                    Surface(
+                        onClick = { viewModel.openCityFilter() },
+                        shape = RoundedCornerShape(24.dp),
+                        color = Color.White.copy(alpha = 0.2f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("open_city_filter")
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(Icons.Filled.LocationCity, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                            Text(uiState.selectedCity, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(Icons.Filled.LocationCity, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                Text(uiState.selectedCity, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                            }
+                            Icon(Icons.Filled.ArrowDropDown, contentDescription = "Cambia luogo", tint = Color.White)
                         }
-                        Icon(Icons.Filled.ArrowDropDown, contentDescription = "Cambia luogo", tint = Color.White)
+                    }
+
+                    Surface(
+                        onClick = { isBrandFilterOpen = true },
+                        shape = RoundedCornerShape(24.dp),
+                        color = Color.White.copy(alpha = 0.2f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("open_brand_filter")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(Icons.Filled.LocalGasStation, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                Text(uiState.selectedBrand, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                            }
+                            Icon(Icons.Filled.ArrowDropDown, contentDescription = "Cambia marchio", tint = Color.White)
+                        }
                     }
                 }
             }
@@ -486,6 +540,12 @@ fun HomeScreen(
             // Elenco dei distributori (la mappa vive a tutto schermo, sopra).
             run {
                 if (uiState.stations.isEmpty()) {
+                    // Lista vuota per due motivi diversi: filtri troppo stretti (l'utente cambia i
+                    // filtri) o nessun dato mai scaricato/fallito (l'utente deve ritentare).
+                    val hasActiveFilters = uiState.searchQuery.isNotBlank() ||
+                        uiState.selectedCity != "Tutti" ||
+                        uiState.selectedBrand != "Tutti" ||
+                        uiState.filterFavoritesOnly
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -501,10 +561,25 @@ fun HomeScreen(
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = "Nessun distributore GPL trovato con i filtri selezionati.",
+                                text = if (hasActiveFilters)
+                                    "Nessun distributore GPL trovato con i filtri selezionati."
+                                else
+                                    "Impossibile caricare i distributori. Verifica la connessione e riprova.",
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color.Gray
+                                color = Color.Gray,
+                                modifier = Modifier.padding(horizontal = 16.dp)
                             )
+                            if (!hasActiveFilters) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                androidx.compose.material3.Button(
+                                    onClick = { viewModel.refreshStations() },
+                                    modifier = Modifier.testTag("empty_state_retry_button")
+                                ) {
+                                    Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Riprova")
+                                }
+                            }
                         }
                     }
                 } else {
@@ -516,8 +591,12 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         // ── TOP 5 Cheapest horizontal scroll ───────────────
-                        val allAvgPrice = if (uiState.stations.isNotEmpty()) uiState.stations.map { it.gplPrice }.average() else 0.0
-                        val top5 = uiState.stations.sortedBy { it.gplPrice }.take(5)
+                        // Le stazioni senza prezzo reale (import POI, gplPrice = 0.0) non sono
+                        // "le più economiche": vanno escluse da media e classifica, non solo mostrate
+                        // come N/D nella card.
+                        val stationsWithRealPrice = uiState.stations.filter { it.gplPrice > 0.0 }
+                        val allAvgPrice = if (stationsWithRealPrice.isNotEmpty()) stationsWithRealPrice.map { it.gplPrice }.average() else 0.0
+                        val top5 = stationsWithRealPrice.sortedBy { it.gplPrice }.take(5)
                         if (top5.isNotEmpty()) {
                             item {
                                 Column {
@@ -578,7 +657,15 @@ fun HomeScreen(
                                 distanceKm = dist,
                                 averagePrice = allAvgPrice,
                                 onCardClick = { viewModel.setSelectedStation(station) },
-                                onFavoriteClick = { viewModel.toggleFavorite(station) },
+                                onFavoriteClick = {
+                                    val wasFavorite = station.isFavorite
+                                    viewModel.toggleFavorite(station)
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar(
+                                            if (wasFavorite) "Rimosso dai preferiti" else "Aggiunto ai preferiti"
+                                        )
+                                    }
+                                },
                                 onDirectionsClick = { viewModel.launchGoogleMapsDirections(context, station) },
                                 onReportPriceClick = { viewModel.setStationToReportPrice(station) }
                             )
@@ -591,7 +678,9 @@ fun HomeScreen(
 
     // Modal Sheets & Dialogs
     uiState.selectedStationForDetail?.let { station ->
-        val detailAvg = if (uiState.stations.isNotEmpty()) uiState.stations.map { it.gplPrice }.average() else 0.0
+        val detailAvg = uiState.stations.filter { it.gplPrice > 0.0 }.let { priced ->
+            if (priced.isNotEmpty()) priced.map { it.gplPrice }.average() else 0.0
+        }
         StationDetailDialog(
             station = station,
             viewModel = viewModel,
@@ -605,12 +694,25 @@ fun HomeScreen(
         )
     }
 
+    if (isBrandFilterOpen) {
+        BrandFilterDialog(
+            brands = brandsList,
+            selectedBrand = uiState.selectedBrand,
+            onBrandSelected = { brand ->
+                viewModel.setSelectedBrand(brand)
+                isBrandFilterOpen = false
+            },
+            onDismiss = { isBrandFilterOpen = false }
+        )
+    }
+
     uiState.stationToReportPrice?.let { station ->
         PriceReportDialog(
             station = station,
             initialReporterName = uiState.reporterName,
             onDismiss = { viewModel.setStationToReportPrice(null) },
             onSubmitPrice = { newPrice, reporter, notes ->
+                awaitingPriceReportFeedback = true
                 viewModel.submitPriceUpdate(station, newPrice, reporter, notes)
             }
         )
@@ -618,7 +720,9 @@ fun HomeScreen(
 
     if (uiState.isCalculatorOpen) {
         GplCalculatorSheet(
-            avgGplPrice = if (uiState.stations.isNotEmpty()) uiState.stations.map { it.gplPrice }.average() else 0.715,
+            avgGplPrice = uiState.stations.filter { it.gplPrice > 0.0 }.let { priced ->
+                if (priced.isNotEmpty()) priced.map { it.gplPrice }.average() else 0.715
+            },
             onDismiss = { viewModel.setCalculatorOpen(false) }
         )
     }
@@ -678,5 +782,82 @@ fun HomeScreen(
             onForceRefresh = { viewModel.refreshStations(forceRefresh = true) },
             onInvalidateCache = { viewModel.invalidateCacheTtl() }
         )
+    }
+}
+
+/**
+ * Filtro marchio: stesso pattern visivo del filtro comune ([CityFilterDialog]), ma senza campo di
+ * ricerca perché l'elenco marchi è breve e fisso — non serve filtrarlo.
+ */
+@Composable
+private fun BrandFilterDialog(
+    brands: List<String>,
+    selectedBrand: String,
+    onBrandSelected: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(EcoGreenPrimary)
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(Icons.Filled.LocalGasStation, contentDescription = null, tint = Color.White)
+                    Text(
+                        text = "Filtra per marchio",
+                        color = Color.White,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                    items(brands) { brand ->
+                        val isSelected = selectedBrand.equals(brand, ignoreCase = true)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(if (isSelected) SorrentoBlue.copy(alpha = 0.1f) else Color.Transparent)
+                                .clickable(onClick = { onBrandSelected(brand) })
+                                .padding(horizontal = 20.dp, vertical = 14.dp)
+                                .testTag("brand_filter_option_$brand"),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = brand,
+                                fontSize = 14.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSelected) SorrentoBlue else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (isSelected) {
+                                Icon(Icons.Filled.Check, contentDescription = null, tint = SorrentoBlue)
+                            }
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Chiudi")
+                    }
+                }
+            }
+        }
     }
 }

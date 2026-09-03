@@ -1,8 +1,14 @@
 package com.example
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -13,7 +19,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -23,8 +32,8 @@ import com.example.data.repository.GplRepository
 import com.example.ui.screens.HomeScreen
 import com.example.ui.theme.GplTheme
 import com.example.ui.viewmodel.GplViewModel
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
+
+private const val LOCATION_FIX_TIMEOUT_MS = 20_000L
 
 class MainActivity : ComponentActivity() {
 
@@ -39,18 +48,23 @@ class MainActivity : ComponentActivity() {
         GplViewModel.Factory(repository, italiaRepository, applicationContext)
     }
 
+    /** Vero se almeno uno tra permesso fine/coarse è concesso. Unica fonte di verità, riusata in tutti i punti che devono decidere se chiedere il permesso o procedere. */
+    private fun hasLocationPermission(context: Context): Boolean {
+        val fineGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarseGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        return fineGranted || coarseGranted
+    }
+
     /** Chiede la posizione reale del device una sola volta; se non arriva o il permesso è negato, resta il fallback iniziale su Sorrento. */
     private fun fetchRealDeviceLocation() {
-        val fineGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        val coarseGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        if (!fineGranted && !coarseGranted) {
+        if (!hasLocationPermission(this)) {
             viewModel.onLocationUpdateFailed("Permesso di localizzazione non concesso: impossibile ottenere una posizione GPS reale.")
             return
         }
 
-        val locationManager = getSystemService(LOCATION_SERVICE) as android.location.LocationManager
-        val gpsEnabled = locationManager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER)
-        val networkEnabled = locationManager.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)
+        val locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
+        val gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+        val networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
         if (!gpsEnabled && !networkEnabled) {
             viewModel.onLocationUpdateFailed("Localizzazione disattivata sul device: attiva il GPS nelle impostazioni di sistema, oppure imposta la posizione manualmente.")
             return
@@ -58,20 +72,49 @@ class MainActivity : ComponentActivity() {
 
         viewModel.setLocationLoading(true)
 
-        // PRIORITY_HIGH_ACCURACY forza l'uso del chip GPS reale (fix satellitare), non della
-        // posizione di rete (WiFi/celle) che richiederebbe una connessione internet attiva.
-        val client = LocationServices.getFusedLocationProviderClient(this)
-        client.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
-            .addOnSuccessListener { location ->
-                if (location != null) {
-                    viewModel.updateUserLocation(location.latitude, location.longitude)
-                } else {
-                    viewModel.onLocationUpdateFailed("GPS non ha trovato un fix reale (serve cielo libero e qualche secondo). Riprova all'aperto o imposta la posizione manualmente dalle Impostazioni.")
-                }
+        // Preferisce il chip GPS reale (fix satellitare) alla posizione di rete (WiFi/celle),
+        // coerente con l'alta accuratezza richiesta in precedenza via Play Services.
+        val provider = if (gpsEnabled) LocationManager.GPS_PROVIDER else LocationManager.NETWORK_PROVIDER
+        val mainHandler = Handler(Looper.getMainLooper())
+        var finished = false
+
+        lateinit var listener: LocationListener
+        val timeoutRunnable = Runnable {
+            if (finished) return@Runnable
+            finished = true
+            locationManager.removeUpdates(listener)
+            viewModel.onLocationUpdateFailed("GPS non ha trovato un fix reale (serve cielo libero e qualche secondo). Riprova all'aperto o imposta la posizione manualmente dalle Impostazioni.")
+        }
+
+        listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+                if (finished) return
+                finished = true
+                mainHandler.removeCallbacks(timeoutRunnable)
+                locationManager.removeUpdates(this)
+                viewModel.updateUserLocation(location.latitude, location.longitude)
             }
-            .addOnFailureListener { e ->
-                viewModel.onLocationUpdateFailed("Errore GPS: ${e.message ?: "posizione reale non disponibile"}. Puoi impostarla manualmente dalle Impostazioni.")
+
+            @Deprecated("Deprecated in Java", ReplaceWith(""))
+            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+
+            override fun onProviderEnabled(provider: String) {}
+
+            override fun onProviderDisabled(provider: String) {
+                if (finished) return
+                finished = true
+                mainHandler.removeCallbacks(timeoutRunnable)
+                locationManager.removeUpdates(this)
+                viewModel.onLocationUpdateFailed("Il provider di posizione è stato disattivato durante la ricerca del fix.")
             }
+        }
+
+        try {
+            locationManager.requestLocationUpdates(provider, 0L, 0f, listener, Looper.getMainLooper())
+            mainHandler.postDelayed(timeoutRunnable, LOCATION_FIX_TIMEOUT_MS)
+        } catch (e: SecurityException) {
+            viewModel.onLocationUpdateFailed("Errore GPS: ${e.message ?: "posizione reale non disponibile"}. Puoi impostarla manualmente dalle Impostazioni.")
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -84,10 +127,14 @@ class MainActivity : ComponentActivity() {
                     contract = ActivityResultContracts.RequestMultiplePermissions()
                 ) { fetchRealDeviceLocation() }
 
+                // Sopravvive alla rotazione (Activity ricreata da zero): evita di ri-chiedere
+                // permesso/GPS a ogni cambio di orientamento, non solo al primo avvio.
+                var hasRequestedLocation by rememberSaveable { mutableStateOf(false) }
+
                 LaunchedEffect(Unit) {
-                    val fineGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                    val coarseGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                    if (fineGranted || coarseGranted) {
+                    if (hasRequestedLocation) return@LaunchedEffect
+                    hasRequestedLocation = true
+                    if (hasLocationPermission(context)) {
                         fetchRealDeviceLocation()
                     } else {
                         locationPermissionLauncher.launch(
@@ -103,9 +150,7 @@ class MainActivity : ComponentActivity() {
                     HomeScreen(
                         viewModel = viewModel,
                         onRequestLocationRefresh = {
-                            val fineGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                            val coarseGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                            if (fineGranted || coarseGranted) {
+                            if (hasLocationPermission(context)) {
                                 fetchRealDeviceLocation()
                             } else {
                                 locationPermissionLauncher.launch(
@@ -119,4 +164,3 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-

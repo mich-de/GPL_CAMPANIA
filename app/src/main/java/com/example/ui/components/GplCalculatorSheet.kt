@@ -46,6 +46,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.EcoGreenPrimary
 import com.example.ui.theme.FlameOrange
+import com.example.ui.theme.PriceBadgeBg
+import com.example.ui.theme.PriceBadgeGreen
+import com.example.ui.theme.SavingsBadgeBg
 import com.example.ui.theme.SorrentoBlue
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -173,14 +176,14 @@ fun GplCalculatorSheet(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFDCFCE7))
+                colors = CardDefaults.cardColors(containerColor = PriceBadgeBg)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Filled.Savings,
                             contentDescription = null,
-                            tint = Color(0xFF15803D),
+                            tint = PriceBadgeGreen,
                             modifier = Modifier.size(28.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -188,7 +191,7 @@ fun GplCalculatorSheet(
                             text = "Risparmio Stimato Annuale",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF166534)
+                            color = PriceBadgeGreen
                         )
                     }
 
@@ -198,13 +201,13 @@ fun GplCalculatorSheet(
                         text = "€ ${String.format("%.2f", savingsYear)}",
                         fontSize = 32.sp,
                         fontWeight = FontWeight.Black,
-                        color = Color(0xFF15803D)
+                        color = PriceBadgeGreen
                     )
 
                     Text(
                         text = "Risparmi oltre il 55% ad ogni rifornimento rispetto alla Benzina!",
                         fontSize = 12.sp,
-                        color = Color(0xFF166534)
+                        color = PriceBadgeGreen
                     )
                 }
             }
@@ -227,11 +230,11 @@ fun GplCalculatorSheet(
                 // GPL Pieno Box
                 Card(
                     modifier = Modifier.weight(1f),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9))
+                    colors = CardDefaults.cardColors(containerColor = PriceBadgeBg)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        Text(text = "GPL (Medio)", fontSize = 11.sp, color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold)
-                        Text(text = "€ ${String.format("%.2f", fullTankGpl)}", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1B5E20))
+                        Text(text = "GPL (Medio)", fontSize = 11.sp, color = PriceBadgeGreen, fontWeight = FontWeight.Bold)
+                        Text(text = "€ ${String.format("%.2f", fullTankGpl)}", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = PriceBadgeGreen)
                         Text(text = "€ ${String.format("%.3f", avgGplPrice)} /L", fontSize = 10.sp, color = Color.Gray)
                     }
                 }
@@ -239,7 +242,7 @@ fun GplCalculatorSheet(
                 // Benzina Pieno Box
                 Card(
                     modifier = Modifier.weight(1f),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0))
+                    colors = CardDefaults.cardColors(containerColor = SavingsBadgeBg)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(text = "Benzina", fontSize = 11.sp, color = FlameOrange, fontWeight = FontWeight.Bold)

@@ -18,6 +18,8 @@ import com.example.data.remote.todayDateKey
 import com.example.data.util.ItalianCapUtils
 import com.example.data.util.distanceMeters
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.Locale
 
 private const val CACHE_TTL_MILLIS = 15 * 60 * 1000L // 15 minuti, come il backend Python
@@ -37,6 +39,10 @@ class GplRepository(
 
     private val geocodingEngine = GeocodingEngine(geocodeDao)
 
+    /** Un solo refresh alla volta: un pull-to-refresh doppio o un auto-refresh che si sovrappone a
+     * uno manuale non devono poter interlacciare delete e insert sulle stesse righe. */
+    private val refreshMutex = Mutex()
+
     val allStations: Flow<List<GplStation>> = dao.getAllStations()
     val favoriteStations: Flow<List<GplStation>> = dao.getFavoriteStations()
 
@@ -51,12 +57,12 @@ class GplRepository(
      * reale ottenuto resta la cache offline. Preferiti e stazioni aggiunte manualmente dall'utente
      * non vengono mai cancellati da un refresh.
      */
-    suspend fun refreshStations(forceRefresh: Boolean = false): Int {
+    suspend fun refreshStations(forceRefresh: Boolean = false): Int = refreshMutex.withLock {
         val lastRefresh = BackendPreferences.getLastRefreshTimestamp(context)
         val now = System.currentTimeMillis()
         val cachedCount = dao.countBackendSourcedStations()
         if (!forceRefresh && lastRefresh != null && (now - lastRefresh) < CACHE_TTL_MILLIS) {
-            return cachedCount
+            return@withLock cachedCount
         }
 
         val startedAt = System.currentTimeMillis()
@@ -79,7 +85,7 @@ class GplRepository(
                     message = ""
                 )
             )
-            return cachedCount
+            return@withLock cachedCount
         }
 
         val result = fetched as CampaniaGplData.Stations
@@ -92,8 +98,9 @@ class GplRepository(
         }
 
         val withRestoredFavorites = restoreFavorites(stations)
-        dao.deleteBackendSourcedStations()
-        dao.insertStations(withRestoredFavorites)
+        // Delete + insert in un'unica transazione Room: un kill di processo a metà non lascia mai
+        // la lista stazioni vuota.
+        dao.replaceBackendSourcedStations(withRestoredFavorites)
 
         val freshness = result.stations.priceFreshness(todayDateKey())
         saveDiagnostics(
@@ -112,7 +119,7 @@ class GplRepository(
                 pricesWithoutDate = freshness.withoutDate
             )
         )
-        return withRestoredFavorites.size
+        withRestoredFavorites.size
     }
 
     /** Il tentativo è fallito: si registra il motivo reale della fonte, lasciando intatte le misure
@@ -258,6 +265,15 @@ class GplRepository(
         refreshStations()
     }
 
+    /** Id stabile per una stazione importata da un file POI (myLPG.eu, Ecomotori): derivato da
+     * coordinate e nome, resta identico se lo stesso file viene importato più volte. Un indice
+     * locale che riparte da 0 a ogni import, usato prima, causava sovrascritture silenziose tra
+     * stazioni non correlate tramite OnConflictStrategy.REPLACE. */
+    private fun stablePoiId(prefix: String, lat: Double, lng: Double, name: String): String {
+        val key = "%.5f_%.5f_%s".format(Locale.ROOT, lat, lng, name.trim().lowercase(Locale.ROOT))
+        return "${prefix}_${key.hashCode().toUInt().toString(16)}"
+    }
+
     suspend fun importMyLpgPoiFormat(poiContent: String, isKmlOrXml: Boolean = false) {
         val newStations = mutableListOf<GplStation>()
         val seenCoordinates = mutableSetOf<String>()
@@ -269,7 +285,6 @@ class GplRepository(
             val nameRegex = Regex("""<name>([\s\S]*?)</name>""", RegexOption.IGNORE_CASE)
             val descRegex = Regex("""<description>([\s\S]*?)</description>""", RegexOption.IGNORE_CASE)
 
-            var index = 0
             for (match in placemarkRegex.findAll(poiContent)) {
                 val block = match.value
                 val coordMatch = coordRegex.find(block)
@@ -293,7 +308,9 @@ class GplRepository(
                             val desc = descMatch?.groupValues?.get(1)?.trim() ?: ""
 
                             val parsedAddress = ItalianCapUtils.parseDescription(desc)
-                            val priceInfo = ItalianCapUtils.extractPriceAndDate(desc + " " + rawName)
+                            // defaultPrice = 0.0: se il testo non contiene un prezzo reale, la
+                            // stazione resta un POI valido senza prezzo, non un prezzo inventato.
+                            val priceInfo = ItalianCapUtils.extractPriceAndDate(desc + " " + rawName, defaultPrice = 0.0)
 
                             val brand = when {
                                 rawName.contains("Energas", true) -> "Energas"
@@ -308,7 +325,7 @@ class GplRepository(
 
                             newStations.add(
                                 GplStation(
-                                    id = "mylpg_${index++}",
+                                    id = stablePoiId("mylpg", lat, lng, rawName),
                                     name = if (rawName.length <= 8) "$rawName ${parsedAddress.city}" else rawName,
                                     brand = brand,
                                     address = parsedAddress.fullFormattedAddress,
@@ -317,12 +334,15 @@ class GplRepository(
                                     latitude = lat,
                                     longitude = lng,
                                     gplPrice = priceInfo.price,
-                                    priceLastUpdated = priceInfo.lastUpdated,
+                                    priceLastUpdated = if (priceInfo.price > 0.0) priceInfo.lastUpdated else "",
                                     // Orari/apertura: non presenti nel formato POI myLPG.eu — restano null.
                                     services = "GPL,myLPG.eu,Servito",
                                     isFavorite = false,
                                     phone = "",
-                                    notes = "Importato da myLPG.eu Italia - Prezzo aggiornato (${priceInfo.price} €/L)"
+                                    notes = if (priceInfo.price > 0.0)
+                                        "Importato da myLPG.eu Italia - Prezzo aggiornato (${priceInfo.price} €/L)"
+                                    else
+                                        "Importato da myLPG.eu Italia - prezzo non disponibile nella fonte"
                                 )
                             )
                         } catch (_: Exception) {}
@@ -332,7 +352,7 @@ class GplRepository(
         } else {
             // Parse CSV / TomTom format from myLPG.eu
             val lines = poiContent.lines()
-            for ((index, line) in lines.withIndex()) {
+            for (line in lines) {
                 if (line.isBlank() || line.startsWith("#") || line.startsWith("Longitude") || line.startsWith("lon")) continue
                 val parts = line.split(Regex(""";|,"""))
                 if (parts.size >= 3) {
@@ -347,7 +367,10 @@ class GplRepository(
                         val rawName = parts[2].trim().replace("\"", "")
                         val rawAddress = if (parts.size > 3) parts[3].trim().replace("\"", "") else "myLPG.eu POI"
                         val parsedAddress = ItalianCapUtils.parseDescription(rawAddress)
-                        val priceInfo = ItalianCapUtils.extractPriceAndDate(line + " " + rawAddress)
+                        // defaultPrice = 0.0: niente prezzo inventato quando la riga non ne contiene uno reale.
+                        // Si cerca solo nell'indirizzo, non nell'intera riga: includerla faceva leggere
+                        // un frammento di coordinata (es. "40.6358") come se fosse un prezzo vero.
+                        val priceInfo = ItalianCapUtils.extractPriceAndDate(rawAddress, defaultPrice = 0.0)
 
                         val brand = when {
                             rawName.contains("Energas", true) -> "Energas"
@@ -362,7 +385,7 @@ class GplRepository(
 
                         newStations.add(
                             GplStation(
-                                id = "mylpg_csv_$index",
+                                id = stablePoiId("mylpg_csv", lat, lng, rawName),
                                 name = if (rawName.isBlank()) "Distributore GPL myLPG.eu" else if (rawName.length <= 8) "$rawName ${parsedAddress.city}" else rawName,
                                 brand = brand,
                                 address = parsedAddress.fullFormattedAddress,
@@ -371,12 +394,15 @@ class GplRepository(
                                 latitude = lat,
                                 longitude = lng,
                                 gplPrice = priceInfo.price,
-                                priceLastUpdated = priceInfo.lastUpdated,
+                                priceLastUpdated = if (priceInfo.price > 0.0) priceInfo.lastUpdated else "",
                                 // Orari/apertura: non presenti nel formato CSV myLPG.eu — restano null.
                                 services = "GPL,myLPG.eu,Servito",
                                 isFavorite = false,
                                 phone = "",
-                                notes = "Importato da myLPG.eu Italia - Prezzo aggiornato (${priceInfo.price} €/L)"
+                                notes = if (priceInfo.price > 0.0)
+                                    "Importato da myLPG.eu Italia - Prezzo aggiornato (${priceInfo.price} €/L)"
+                                else
+                                    "Importato da myLPG.eu Italia - prezzo non disponibile nella fonte"
                             )
                         )
                     } catch (_: Exception) {}
@@ -392,7 +418,7 @@ class GplRepository(
     suspend fun importEcomotoriGplCsv(csvContent: String) {
         val lines = csvContent.lines()
         val newStations = mutableListOf<GplStation>()
-        for ((index, line) in lines.withIndex()) {
+        for (line in lines) {
             if (line.isBlank() || line.startsWith("#") || line.startsWith("Longitude")) continue
             val parts = line.split(",")
             if (parts.size >= 3) {
@@ -400,7 +426,7 @@ class GplRepository(
                     val lng = parts[0].trim().toDouble()
                     val lat = parts[1].trim().toDouble()
                     val rawName = parts[2].trim().replace("\"", "")
-                    
+
                     val brand = when {
                         rawName.contains("Eni", true) || rawName.contains("Agip", true) -> "Eni"
                         rawName.contains("IP", true) -> "IP"
@@ -411,10 +437,10 @@ class GplRepository(
                         rawName.contains("Econogas", true) -> "Econogas"
                         else -> "Pompe Bianche"
                     }
-                    
+
                     newStations.add(
                         GplStation(
-                            id = "ecomotori_$index",
+                            id = stablePoiId("ecomotori", lat, lng, rawName),
                             name = rawName.ifBlank { "Distributore GPL Ecomotori" },
                             brand = brand,
                             address = "Coordinate Ecomotori GPL",
@@ -422,13 +448,16 @@ class GplRepository(
                             province = "NA",
                             latitude = lat,
                             longitude = lng,
-                            gplPrice = 0.719,
-                            priceLastUpdated = "Ecomotori GPL Ita",
+                            // Il CSV EcomotoriGPLIta contiene solo coordinate e nome, mai un prezzo
+                            // reale: 0.0 è la sentinella "prezzo sconosciuto" già usata altrove
+                            // (vedi toGplStation), non un valore inventato spacciato per reale.
+                            gplPrice = 0.0,
+                            priceLastUpdated = "",
                             // Orari/apertura: non presenti nel CSV EcomotoriGPLIta — restano null.
                             services = "GPL,Ecomotori POI,Servito",
                             isFavorite = false,
                             phone = "",
-                            notes = "Importato da EcomotoriGPLIta.csv POI Database"
+                            notes = "Importato da EcomotoriGPLIta.csv POI Database - prezzo non disponibile nella fonte"
                         )
                     )
                 } catch (_: Exception) {}
