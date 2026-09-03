@@ -1,0 +1,23 @@
+GPL Campania mostra i prezzi del GPL delle 5 province campane (Avellino, Benevento, Caserta, Napoli, Salerno) leggendoli dall'Osservaprezzi carburanti del MIMIT, gli stessi prezzi che i gestori sono obbligati a comunicare al ministero, li posiziona su mappa e ti dice quale distributore conviene davvero, considerando anche quanto è lontano.
+
+App Android che gira interamente sul telefono: nessun server, nessun account, nessuna chiave API. Il database resta sul device e funziona anche offline, mostrando l'ultimo dato reale salvato.
+
+Caratteristiche principali:
+
+* Prezzi ufficiali comunicati dai gestori al MIMIT, con la data reale di comunicazione
+* Mappa OpenStreetMap via osmdroid, senza chiavi Google Maps
+* Pin colorati per fascia di prezzo, ricavati dai prezzi realmente in lista
+* Ordinamento per distanza dal fix GPS del device o da una posizione impostata a mano
+* Preferiti che sopravvivono agli aggiornamenti
+* Filtro per comune e per marchio, costruiti dinamicamente sui dati realmente presenti
+* Calcolatore di spesa per un pieno, con confronto tra distributori
+* Segnalazione prezzo, se trovi un valore diverso da quello pubblicato
+* Aggiunta di un distributore mancante, con geocoding reale dell'indirizzo
+* Import punti di interesse da file myLPG.eu in formato CSV o KML
+* Medie nazionali e classifica regionale del GPL in Italia
+* Notizie sui carburanti dalla sala stampa del MIMIT
+* Conto alla rovescia per la scadenza di revisione del serbatoio
+
+Il principio che guida tutto: l'app non inventa mai un dato. Se una coordinata, un orario o un prezzo non sono forniti dalla fonte, il campo resta vuoto invece di mostrare un valore plausibile ma inventato.
+
+Codice sorgente aperto sotto licenza MIT.

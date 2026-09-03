@@ -1,0 +1,1 @@
+Version 1.1.0: removed the Google Play Services dependency for location (now uses only native Android APIs), fixed a bug that re-triggered the GPS request on every screen rotation, prices are never fabricated anymore for stations imported from external files without a real price, brand filter, visible confirmation after favorites and price reports, new color theme.

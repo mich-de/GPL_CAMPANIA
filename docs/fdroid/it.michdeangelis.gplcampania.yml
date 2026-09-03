@@ -1,0 +1,51 @@
+# Metadata F-Droid per GPL Campania — pronto per la submission.
+#
+# Questo file NON va in questo repo: F-Droid vuole i metadata build/categoria
+# in un file separato dentro il loro repo "fdroiddata"
+# (gitlab.com/fdroid/fdroiddata), col nome esatto già usato qui sotto
+# (deve coincidere con l'applicationId).
+#
+# Cosa fare, nell'ordine:
+# 1. Crea un account su https://gitlab.com/ (se non ce l'hai già).
+# 2. Vai su https://gitlab.com/fdroid/fdroiddata e clicca "Fork".
+# 3. Nel TUO fork, crea il file metadata/it.michdeangelis.gplcampania.yml
+#    (via interfaccia web GitLab: "+" → "New file" nella cartella metadata/)
+#    e incolla ESATTAMENTE il contenuto qui sotto (righe da "Categories:" in poi,
+#    senza questo blocco di commento).
+# 4. GitLab ti propone da solo di aprire una Merge Request verso
+#    fdroid/fdroiddata dopo il commit: accetta, scrivi un titolo tipo
+#    "New app: GPL Campania" e invia.
+# 5. Un volontario F-Droid revisiona build e licenza (può volerci qualche
+#    settimana). Rispondi ai commenti della MR se chiedono modifiche.
+# 6. La descrizione, i testi e il changelog che vedi sullo store F-Droid
+#    NON stanno in questo file: li ho già preparati in
+#    fastlane/metadata/android/{it-IT,en-US}/ nel repo GPL_CAMPANIA — F-Droid
+#    li legge da lì automaticamente al momento della build, non serve altro.
+#
+# Guida ufficiale completa:
+# https://f-droid.org/docs/Submitting_to_F-Droid_Quick_Start_Guide/
+
+Categories:
+  - Navigation
+  - Money
+License: MIT
+AuthorName: mich-de
+SourceCode: https://github.com/mich-de/GPL_CAMPANIA
+IssueTracker: https://github.com/mich-de/GPL_CAMPANIA/issues
+Changelog: https://github.com/mich-de/GPL_CAMPANIA/releases
+
+RepoType: git
+Repo: https://github.com/mich-de/GPL_CAMPANIA.git
+
+Builds:
+  - versionName: 1.1.0
+    versionCode: 2
+    commit: v1.1.0
+    subdir: app
+    gradle:
+      - yes
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 1.1.0
+CurrentVersionCode: 2
