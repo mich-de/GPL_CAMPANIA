@@ -108,7 +108,9 @@ object ItalianCapUtils {
 
     fun extractPriceAndDate(text: String, defaultPrice: Double = 0.718): ParsedPriceInfo {
         var foundPrice = defaultPrice
-        var lastUpdated = "Aggiornato da myLPG.eu"
+        // Vuoto per davvero finché non si trova una data reale nel testo: "Aggiornato da myLPG.eu"
+        // come default fisso sembrava un dato di freschezza vero anche quando non lo era.
+        var lastUpdated = ""
 
         // Search for price patterns like 0.718, 0,718, 0.72 €/l, EUR 0.719
         val priceRegex = Regex("""(?:0[.,]\d{2,3})""")
