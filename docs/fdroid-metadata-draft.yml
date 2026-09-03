@@ -7,11 +7,9 @@
 #
 # Prossimi passi manuali (da fare con un account GitLab):
 # 1. Fai fork di https://gitlab.com/fdroid/fdroiddata
-# 2. Crea il commit git taggato (es. `git tag v1.1.0 && git push origin v1.1.0`)
-#    sul repo GPL_CAMPANIA, e sostituisci TAG_DA_CREARE sotto con quel tag o
-#    con l'hash del commit.
+# 2. Il tag v1.1.0 è già stato creato e pushato su GPL_CAMPANIA (commit sotto).
 # 3. Copia questo contenuto in metadata/it.michdeangelis.gplcampania.yml nel
-#    tuo fork di fdroiddata, aggiusta commit/tag, apri una merge request.
+#    tuo fork di fdroiddata, apri una merge request.
 # 4. Segui la guida ufficiale:
 #    https://f-droid.org/docs/Submitting_to_F-Droid_Quick_Start_Guide/
 
@@ -29,7 +27,7 @@ Repo: https://github.com/mich-de/GPL_CAMPANIA.git
 Builds:
   - versionName: 1.1.0
     versionCode: 2
-    commit: TAG_DA_CREARE  # sostituire col tag/commit reale dopo il rilascio
+    commit: v1.1.0
     subdir: app
     gradle:
       - yes
