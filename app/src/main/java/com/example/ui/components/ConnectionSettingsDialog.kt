@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -41,16 +42,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.BuildConfig
+import com.example.data.local.formatItalianDateTime
 import com.example.ui.theme.EcoGreenPrimary
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
-
-private fun formatLastRefresh(timestampMillis: Long?): String {
-    if (timestampMillis == null) return "Mai aggiornato in questa sessione"
-    val formatter = SimpleDateFormat("dd/MM/yyyy 'alle' HH:mm", Locale.ITALIAN)
-    return formatter.format(Date(timestampMillis))
-}
 
 @Composable
 fun ConnectionSettingsDialog(
@@ -64,6 +58,7 @@ fun ConnectionSettingsDialog(
     onSaveReporterName: (String) -> Unit,
     onRequestLocationRefresh: () -> Unit,
     onForceRefreshBackend: () -> Unit,
+    onOpenMonitoring: () -> Unit,
     onSetManualLocation: (Double, Double) -> Unit
 ) {
     var reporterNameText by remember { mutableStateOf(reporterName) }
@@ -211,8 +206,20 @@ fun ConnectionSettingsDialog(
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onOpenMonitoring,
+                    modifier = Modifier.fillMaxWidth().testTag("settings_open_monitoring_button")
+                ) {
+                    Icon(Icons.Filled.MonitorHeart, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Diagnostica")
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Ultimo aggiornamento: ${formatLastRefresh(lastRefreshTimestamp)}",
+                    text = "Ultimo aggiornamento: " +
+                        if (lastRefreshTimestamp == null) "mai in questa installazione"
+                        else formatItalianDateTime(lastRefreshTimestamp),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.testTag("settings_last_refresh_text")

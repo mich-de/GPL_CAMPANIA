@@ -10,7 +10,16 @@ class DataFetchException(message: String) : Exception(message)
 
 /** Esito di un tentativo di aggiornamento dei distributori GPL della Campania. */
 sealed interface CampaniaGplData {
-    data class Stations(val stations: List<RemoteGplStation>, val source: String) : CampaniaGplData
+    /**
+     * [rawCount] è quanti impianti aveva restituito la fonte **prima** di unire le iscrizioni
+     * doppie: la differenza con `stations.size` è l'unico modo di sapere quanti doppioni c'erano,
+     * dato che dopo la fusione non ne resta traccia.
+     */
+    data class Stations(
+        val stations: List<RemoteGplStation>,
+        val source: String,
+        val rawCount: Int = stations.size
+    ) : CampaniaGplData
 
     /** I dati ufficiali non sono cambiati: quelli già in Room sono aggiornati. */
     data object Unchanged : CampaniaGplData
@@ -40,12 +49,14 @@ object CampaniaGplDataSource {
         // le poche pompe iscritte due volte.
         val fromApi = OsservaprezziApiClient.fetchCampaniaGplStations()
         if (fromApi.isNotEmpty()) {
-            return CampaniaGplData.Stations(fromApi.mergeDuplicatePlants(), SOURCE_API)
+            return CampaniaGplData.Stations(fromApi.mergeDuplicatePlants(), SOURCE_API, fromApi.size)
         }
 
         return when (val fromCsv = MimitCsvFallback.fetch(context, allowConditional = hasCachedData)) {
             is CsvFallbackResult.Data ->
-                CampaniaGplData.Stations(fromCsv.stations.mergeDuplicatePlants(), SOURCE_CSV)
+                CampaniaGplData.Stations(
+                    fromCsv.stations.mergeDuplicatePlants(), SOURCE_CSV, fromCsv.stations.size
+                )
             CsvFallbackResult.Unchanged -> CampaniaGplData.Unchanged
             CsvFallbackResult.Unavailable -> throw DataFetchException(
                 "Dati ufficiali non raggiungibili: né l'API dell'Osservaprezzi carburanti né gli " +

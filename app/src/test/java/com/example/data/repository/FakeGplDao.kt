@@ -38,6 +38,15 @@ class FakeGplDao : GplDao {
     override suspend fun getFavoriteStationIds(): List<String> =
         stationsFlow.value.filter { it.isFavorite }.map { it.id }
 
+    override suspend fun countAllStations(): Int = stationsFlow.value.size
+
+    override suspend fun countStationsWithoutCoordinates(): Int =
+        stationsFlow.value.count { it.latitude == null || it.longitude == null }
+
+    override suspend fun countFavoriteStations(): Int = stationsFlow.value.count { it.isFavorite }
+
+    override suspend fun countPriceReports(): Int = priceReportsFlow.value.size
+
     override suspend fun getFavoriteBackendStations(): List<GplStation> =
         stationsFlow.value.filter { it.isFavorite && it.id.startsWith("gpl_") }
 

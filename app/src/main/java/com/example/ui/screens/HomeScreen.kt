@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
@@ -66,6 +67,8 @@ import androidx.compose.ui.unit.sp
 import com.example.ui.components.AddStationDialog
 import com.example.ui.components.CityFilterDialog
 import com.example.ui.components.ConnectionSettingsDialog
+import com.example.ui.components.GplItaliaSheet
+import com.example.ui.components.MonitoringPanelDialog
 import com.example.ui.components.GplCalculatorSheet
 import com.example.ui.components.GplStationCard
 import com.example.ui.components.InteractiveMapView
@@ -78,6 +81,7 @@ import com.example.ui.viewmodel.GplUiState
 import com.example.ui.viewmodel.GplViewModel
 import com.example.ui.viewmodel.SortMode
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material.icons.filled.CloudDownload
@@ -102,6 +106,14 @@ fun HomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
+    // A tutto schermo il tasto indietro riporta all'elenco invece di chiudere l'app; se c'è una
+    // scheda aperta, il primo indietro chiude quella. Il secondo handler è registrato dopo perché
+    // in Compose ha la precedenza quando è attivo.
+    BackHandler(enabled = uiState.isMapView) { viewModel.toggleMapView() }
+    BackHandler(enabled = uiState.isMapView && uiState.mapFocusedStation != null) {
+        viewModel.setMapFocus(null)
+    }
+
     val citiesList = listOf(
         "Tutti",
         "Avellino",
@@ -123,8 +135,11 @@ fun HomeScreen(
     Scaffold(
         modifier = modifier.testTag("home_screen_scaffold"),
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        // Sulla mappa la barra non compare: insieme a ricerca e filtri occupava un terzo dello
+        // schermo, e su quel che restava lo zoom a due dita era scomodo. I comandi che servono
+        // davvero sulla mappa stanno sulla mappa.
         topBar = {
-            TopAppBar(
+            if (!uiState.isMapView) TopAppBar(
                 title = {
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -173,6 +188,18 @@ fun HomeScreen(
                         }
                     }
 
+                    // "GPL in Italia": numeri nazionali, notizie ufficiali e scadenza serbatoio.
+                    IconButton(
+                        onClick = { viewModel.openItalia() },
+                        modifier = Modifier.testTag("open_italia_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Public,
+                            contentDescription = "GPL in Italia",
+                            tint = Color.White
+                        )
+                    }
+
                     // Connection Settings Button
                     IconButton(
                         onClick = { viewModel.openConnectionSettings() },
@@ -201,7 +228,9 @@ fun HomeScreen(
             )
         },
         floatingActionButton = {
-            Column(horizontalAlignment = Alignment.End) {
+            // Questi due pulsanti coprivano l'angolo in basso a destra della mappa, proprio dove
+            // finisce il pollice quando si pizzica per ingrandire.
+            if (!uiState.isMapView) Column(horizontalAlignment = Alignment.End) {
                 // Calculator FAB
                 FloatingActionButton(
                     onClick = { viewModel.setCalculatorOpen(true) },
@@ -233,6 +262,26 @@ fun HomeScreen(
             }
         }
     ) { innerPadding ->
+
+        if (uiState.isMapView) {
+            // A tutto schermo: la mappa disegna anche sotto le barre di sistema, mentre i suoi
+            // comandi restano dentro `innerPadding` per non finirci sotto.
+            InteractiveMapView(
+                stations = uiState.stations,
+                userLat = uiState.userLat,
+                userLng = uiState.userLng,
+                // Toccare un pin evidenzia il distributore sulla mappa; la finestra di dettaglio
+                // si apre solo se l'utente la chiede, altrimenti coprirebbe la mappa appena
+                // toccata rendendo invisibile la scheda in fondo.
+                focusedStation = uiState.mapFocusedStation,
+                onFocusStation = { viewModel.setMapFocus(it) },
+                onOpenDetail = { viewModel.setSelectedStation(it) },
+                onDirectionsClick = { viewModel.launchGoogleMapsDirections(context, it) },
+                contentPadding = innerPadding,
+                onBackToList = { viewModel.toggleMapView() }
+            )
+            return@Scaffold
+        }
 
         Column(
             modifier = Modifier
@@ -400,6 +449,15 @@ fun HomeScreen(
                         modifier = Modifier.testTag("sort_brand_chip")
                     )
 
+                    // Sort: nome del distributore. SortMode.NAME esisteva già nel ViewModel ma
+                    // nessun comando lo raggiungeva.
+                    FilterChip(
+                        selected = uiState.sortMode == SortMode.NAME,
+                        onClick = { viewModel.setSortMode(SortMode.NAME) },
+                        label = { Text("Nome", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) },
+                        modifier = Modifier.testTag("sort_name_chip")
+                    )
+
                     Spacer(modifier = Modifier.width(4.dp))
 
                     // Favorites Only Toggle Chip
@@ -425,18 +483,8 @@ fun HomeScreen(
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
 
-            // Main Content Body (List or Map)
-            if (uiState.isMapView) {
-                InteractiveMapView(
-                    stations = uiState.stations,
-                    userLat = uiState.userLat,
-                    userLng = uiState.userLng,
-                    selectedStation = uiState.selectedStationForDetail,
-                    onStationSelect = { viewModel.setSelectedStation(it) },
-                    onDirectionsClick = { viewModel.launchGoogleMapsDirections(context, it) }
-                )
-            } else {
-                // List View
+            // Elenco dei distributori (la mappa vive a tutto schermo, sopra).
+            run {
                 if (uiState.stations.isEmpty()) {
                     Box(
                         modifier = Modifier
@@ -605,7 +653,30 @@ fun HomeScreen(
             onSaveReporterName = { name -> viewModel.setReporterName(name) },
             onRequestLocationRefresh = onRequestLocationRefresh,
             onForceRefreshBackend = { viewModel.refreshStations(forceRefresh = true) },
+            onOpenMonitoring = { viewModel.openMonitoringPanel() },
             onSetManualLocation = { lat, lng -> viewModel.setManualLocation(lat, lng) }
+        )
+    }
+
+    if (uiState.italia.isOpen) {
+        GplItaliaSheet(
+            state = uiState.italia,
+            onDismiss = { viewModel.closeItalia() },
+            onSelectTab = { tab -> viewModel.setItaliaTab(tab) },
+            onRefreshStats = { force -> viewModel.refreshNationalStats(force) },
+            onRefreshNews = { viewModel.refreshNews() },
+            onSaveTank = { revision -> viewModel.saveTankRevision(revision) },
+            onClearTank = { viewModel.clearTankRevision() }
+        )
+    }
+
+    if (uiState.isMonitoringOpen) {
+        MonitoringPanelDialog(
+            report = uiState.monitoringReport,
+            isRefreshing = uiState.isScrapingLoading,
+            onDismiss = { viewModel.closeMonitoringPanel() },
+            onForceRefresh = { viewModel.refreshStations(forceRefresh = true) },
+            onInvalidateCache = { viewModel.invalidateCacheTtl() }
         )
     }
 }

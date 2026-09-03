@@ -35,6 +35,21 @@ interface GplDao {
     @Query("SELECT id FROM gpl_stations WHERE isFavorite = 1")
     suspend fun getFavoriteStationIds(): List<String>
 
+    // Conteggi per il pannello di diagnostica: letti al momento dell'apertura, perché cambiano
+    // anche fuori dal refresh (un preferito, una segnalazione, un distributore aggiunto a mano).
+
+    @Query("SELECT COUNT(*) FROM gpl_stations")
+    suspend fun countAllStations(): Int
+
+    @Query("SELECT COUNT(*) FROM gpl_stations WHERE latitude IS NULL OR longitude IS NULL")
+    suspend fun countStationsWithoutCoordinates(): Int
+
+    @Query("SELECT COUNT(*) FROM gpl_stations WHERE isFavorite = 1")
+    suspend fun countFavoriteStations(): Int
+
+    @Query("SELECT COUNT(*) FROM price_reports")
+    suspend fun countPriceReports(): Int
+
     /** Preferiti provenienti dalla fonte ufficiale: righe intere, servono indirizzo e coordinate
      * per ritrovare la stessa stazione anche se la fonte le ha cambiato identificativo. */
     @Query("SELECT * FROM gpl_stations WHERE isFavorite = 1 AND id LIKE 'gpl\\_%' ESCAPE '\\'")

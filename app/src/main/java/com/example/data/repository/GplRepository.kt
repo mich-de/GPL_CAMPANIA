@@ -5,12 +5,16 @@ import com.example.data.geocoding.GeocodeDao
 import com.example.data.geocoding.GeocodingEngine
 import com.example.data.local.BackendPreferences
 import com.example.data.local.GplDao
+import com.example.data.local.MonitoringReport
+import com.example.data.local.RefreshDiagnostics
 import com.example.data.model.GplStation
 import com.example.data.model.UserPriceReport
 import com.example.data.remote.CampaniaGplData
 import com.example.data.remote.CampaniaGplDataSource
 import com.example.data.remote.DataFetchException
 import com.example.data.remote.RemoteGplStation
+import com.example.data.remote.priceFreshness
+import com.example.data.remote.todayDateKey
 import com.example.data.util.ItalianCapUtils
 import com.example.data.util.distanceMeters
 import kotlinx.coroutines.flow.Flow
@@ -55,20 +59,105 @@ class GplRepository(
             return cachedCount
         }
 
-        val fetched = CampaniaGplDataSource.fetch(context, hasCachedData = cachedCount > 0)
-        if (fetched is CampaniaGplData.Unchanged) return cachedCount
+        val startedAt = System.currentTimeMillis()
+        val fetched = try {
+            CampaniaGplDataSource.fetch(context, hasCachedData = cachedCount > 0)
+        } catch (e: Exception) {
+            recordFailure(startedAt, e.message.orEmpty())
+            throw e
+        }
 
-        val stations = (fetched as CampaniaGplData.Stations).stations.mapNotNull { it.toGplStation() }
-        if (stations.isEmpty()) {
-            throw DataFetchException(
-                "La fonte ufficiale ha risposto ma non contiene distributori GPL in Campania. L'ultimo dato reale resta disponibile."
+        if (fetched is CampaniaGplData.Unchanged) {
+            // Un 304 non è un aggiornamento e non è un errore: si annota l'esito senza toccare le
+            // misure dell'ultimo scarico riuscito, che descrivono ancora i dati in Room.
+            saveDiagnostics(
+                BackendPreferences.getRefreshDiagnostics(context).copy(
+                    attemptedAt = startedAt,
+                    outcome = RefreshDiagnostics.Outcome.UNCHANGED,
+                    source = CampaniaGplDataSource.SOURCE_CSV,
+                    durationMillis = System.currentTimeMillis() - startedAt,
+                    message = ""
+                )
             )
+            return cachedCount
+        }
+
+        val result = fetched as CampaniaGplData.Stations
+        val stations = result.stations.mapNotNull { it.toGplStation() }
+        if (stations.isEmpty()) {
+            val reason = "La fonte ufficiale ha risposto ma non contiene distributori GPL in Campania. " +
+                "L'ultimo dato reale resta disponibile."
+            recordFailure(startedAt, reason)
+            throw DataFetchException(reason)
         }
 
         val withRestoredFavorites = restoreFavorites(stations)
         dao.deleteBackendSourcedStations()
         dao.insertStations(withRestoredFavorites)
+
+        val freshness = result.stations.priceFreshness(todayDateKey())
+        saveDiagnostics(
+            RefreshDiagnostics(
+                attemptedAt = startedAt,
+                outcome = RefreshDiagnostics.Outcome.SUCCESS,
+                source = result.source,
+                durationMillis = System.currentTimeMillis() - startedAt,
+                message = "",
+                stationsWritten = withRestoredFavorites.size,
+                duplicatesMerged = (result.rawCount - result.stations.size).coerceAtLeast(0),
+                withoutCoordinates = withRestoredFavorites.count { it.latitude == null || it.longitude == null },
+                pricesToday = freshness.today,
+                pricesWithinWeek = freshness.withinWeek,
+                pricesOlderThanMonth = freshness.olderThanMonth,
+                pricesWithoutDate = freshness.withoutDate
+            )
+        )
         return withRestoredFavorites.size
+    }
+
+    /** Il tentativo è fallito: si registra il motivo reale della fonte, lasciando intatte le misure
+     * dell'ultimo scarico riuscito — sono ancora quelle che descrivono i dati mostrati. */
+    private fun recordFailure(startedAt: Long, reason: String) {
+        saveDiagnostics(
+            BackendPreferences.getRefreshDiagnostics(context).copy(
+                attemptedAt = startedAt,
+                outcome = RefreshDiagnostics.Outcome.FAILED,
+                source = "",
+                durationMillis = System.currentTimeMillis() - startedAt,
+                message = reason
+            )
+        )
+    }
+
+    private fun saveDiagnostics(diagnostics: RefreshDiagnostics) {
+        BackendPreferences.setRefreshDiagnostics(context, diagnostics)
+    }
+
+    /**
+     * Stato corrente dell'app per il pannello di diagnostica: la diagnostica persistita più i
+     * conteggi letti adesso da Room. Non fa nessuna chiamata di rete.
+     */
+    suspend fun buildMonitoringReport(): MonitoringReport {
+        val total = dao.countAllStations()
+        val official = dao.countBackendSourcedStations()
+        return MonitoringReport(
+            diagnostics = BackendPreferences.getRefreshDiagnostics(context),
+            lastRefreshTimestamp = BackendPreferences.getLastRefreshTimestamp(context),
+            cacheTtlMillis = CACHE_TTL_MILLIS,
+            totalStations = total,
+            officialStations = official,
+            userStations = (total - official).coerceAtLeast(0),
+            favorites = dao.countFavoriteStations(),
+            priceReports = dao.countPriceReports(),
+            withoutCoordinates = dao.countStationsWithoutCoordinates(),
+            csvLastModified = BackendPreferences.getCsvPricesLastModified(context),
+            generatedAt = System.currentTimeMillis()
+        )
+    }
+
+    /** Fa scadere la cache di 15 minuti senza cancellare niente: i dati reali restano al loro posto. */
+    fun invalidateCacheTtl() {
+        BackendPreferences.clearLastRefreshTimestamp(context)
     }
 
     /**

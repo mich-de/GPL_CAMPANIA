@@ -39,13 +39,11 @@ internal data class CsvGplPrice(val price: Double, val isSelf: Boolean, val dtCo
  */
 object MimitCsvFallback {
 
-    private const val PRICES_URL = "https://www.mimit.gov.it/images/exportCSV/prezzo_alle_8.csv"
-    private const val REGISTRY_URL =
+    internal const val PRICES_URL = "https://www.mimit.gov.it/images/exportCSV/prezzo_alle_8.csv"
+    internal const val REGISTRY_URL =
         "https://www.mimit.gov.it/images/exportCSV/anagrafica_impianti_attivi.csv"
     private const val USER_AGENT = "GPLCampaniaApp/1.0 (+https://github.com/mich-de/GPL_CAMPANIA)"
 
-    private const val DELIMITER = '|'
-    private const val ID_COLUMN = "idImpianto"
     private const val GPL_LABEL = "GPL"
 
     private val httpClient = OkHttpClient.Builder()
@@ -91,7 +89,8 @@ object MimitCsvFallback {
             }
         }
 
-    private fun request(url: String, ifModifiedSince: String?): Response {
+    /** Unica richiesta HTTP verso gli open data: la riusa anche chi calcola le medie nazionali. */
+    internal fun request(url: String, ifModifiedSince: String?): Response {
         val builder = Request.Builder()
             .url(url)
             .header("User-Agent", USER_AGENT)
@@ -100,7 +99,7 @@ object MimitCsvFallback {
         return httpClient.newCall(builder.build()).execute()
     }
 
-    private fun Response.reader(): BufferedReader =
+    internal fun Response.reader(): BufferedReader =
         BufferedReader(InputStreamReader(body!!.byteStream(), Charsets.UTF_8), 64 * 1024)
 
     /**
@@ -109,21 +108,21 @@ object MimitCsvFallback {
      */
     internal fun readGplPrices(reader: BufferedReader): Map<String, CsvGplPrice> {
         val prices = HashMap<String, CsvGplPrice>(6000)
-        forEachRow(reader) { columns, header ->
-            if (columns.value(header, "descCarburante") != GPL_LABEL) return@forEachRow
-            val id = columns.value(header, ID_COLUMN)
-            if (id.isEmpty()) return@forEachRow
-            val price = columns.value(header, "prezzo").toDoubleOrNull() ?: return@forEachRow
-            if (price <= 0.0) return@forEachRow
+        forEachCsvRow(reader) { columns, header ->
+            if (columns.csvValue(header, "descCarburante") != GPL_LABEL) return@forEachCsvRow
+            val id = columns.csvValue(header, CSV_ID_COLUMN)
+            if (id.isEmpty()) return@forEachCsvRow
+            val price = columns.csvValue(header, "prezzo").toDoubleOrNull() ?: return@forEachCsvRow
+            if (price <= 0.0) return@forEachCsvRow
 
             // Stesso criterio dell'API: il prezzo più basso e, a parità, la modalità self.
-            val isSelf = columns.value(header, "isSelf") == "1"
+            val isSelf = columns.csvValue(header, "isSelf") == "1"
             val current = prices[id]
             if (current == null || price < current.price || (price == current.price && isSelf && !current.isSelf)) {
                 prices[id] = CsvGplPrice(
                     price = price,
                     isSelf = isSelf,
-                    dtComu = columns.value(header, "dtComu")
+                    dtComu = columns.csvValue(header, "dtComu")
                 )
             }
         }
@@ -139,23 +138,23 @@ object MimitCsvFallback {
         prices: Map<String, CsvGplPrice>
     ): List<RemoteGplStation> {
         val stations = mutableListOf<RemoteGplStation>()
-        forEachRow(reader) { columns, header ->
-            val provincia = columns.value(header, "Provincia").uppercase()
-            if (provincia !in CAMPANIA_PROVINCES) return@forEachRow
-            val id = columns.value(header, ID_COLUMN)
-            val price = prices[id] ?: return@forEachRow
+        forEachCsvRow(reader) { columns, header ->
+            val provincia = columns.csvValue(header, "Provincia").uppercase()
+            if (provincia !in CAMPANIA_PROVINCES) return@forEachCsvRow
+            val id = columns.csvValue(header, CSV_ID_COLUMN)
+            val price = prices[id] ?: return@forEachCsvRow
             val communicated = parseCsvPriceDate(price.dtComu)
 
             stations.add(
                 RemoteGplStation(
-                    impiantoId = id.toLongOrNull() ?: return@forEachRow,
-                    nome = columns.value(header, "Nome Impianto"),
-                    brand = columns.value(header, "Bandiera"),
-                    via = columns.value(header, "Indirizzo"),
-                    comune = columns.value(header, "Comune"),
+                    impiantoId = id.toLongOrNull() ?: return@forEachCsvRow,
+                    nome = columns.csvValue(header, "Nome Impianto"),
+                    brand = columns.csvValue(header, "Bandiera"),
+                    via = columns.csvValue(header, "Indirizzo"),
+                    comune = columns.csvValue(header, "Comune"),
                     provincia = provincia,
-                    latitude = columns.coordinate(header, "Latitudine"),
-                    longitude = columns.coordinate(header, "Longitudine"),
+                    latitude = columns.csvCoordinate(header, "Latitudine"),
+                    longitude = columns.csvCoordinate(header, "Longitudine"),
                     gplPrice = price.price,
                     gplIsSelf = price.isSelf,
                     priceDate = communicated.formatted,
@@ -165,36 +164,4 @@ object MimitCsvFallback {
         }
         return stations
     }
-
-    /**
-     * Scorre il CSV riga per riga senza mai materializzarlo: la prima riga (`Estrazione del …`) va
-     * scartata, la seconda è l'intestazione da cui si ricavano le posizioni delle colonne.
-     */
-    private inline fun forEachRow(
-        reader: BufferedReader,
-        onRow: (columns: List<String>, header: Map<String, Int>) -> Unit
-    ) {
-        var header: Map<String, Int>? = null
-        var line = reader.readLine()
-        while (line != null) {
-            val current = header
-            if (current == null) {
-                if (line.startsWith(ID_COLUMN)) {
-                    header = line.split(DELIMITER)
-                        .withIndex()
-                        .associate { (index, name) -> name.trim() to index }
-                }
-            } else if (line.isNotBlank()) {
-                onRow(line.split(DELIMITER), current)
-            }
-            line = reader.readLine()
-        }
-    }
-
-    private fun List<String>.value(header: Map<String, Int>, name: String): String =
-        header[name]?.let { getOrNull(it) }?.trim().orEmpty()
-
-    /** Coordinata reale o `null`: uno 0.0 nell'anagrafica significa "non rilevata", non "equatore". */
-    private fun List<String>.coordinate(header: Map<String, Int>, name: String): Double? =
-        value(header, name).toDoubleOrNull()?.takeIf { !it.isNaN() && it != 0.0 }
 }

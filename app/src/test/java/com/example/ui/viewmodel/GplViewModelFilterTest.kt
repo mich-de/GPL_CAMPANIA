@@ -123,6 +123,47 @@ class GplViewModelFilterTest {
     }
 
     @Test
+    fun `sort by brand is alphabetical for a person, not for the ASCII table`() {
+        // Marchi copiati dall'anagrafica ufficiale della Campania, con le loro maiuscole irregolari.
+        val stations = listOf(
+            station(id = "toil", brand = "Toil"),
+            station(id = "bpetrol", brand = "bpetrol"),
+            station(id = "aps", brand = "APStazionidiServizio"),
+            station(id = "agip", brand = "AgipEni")
+        )
+
+        val result = GplViewModel.applyFiltersAndSort(stations, FilterParams(sortMode = SortMode.BRAND), 0.0, 0.0)
+
+        assertEquals(listOf("agip", "aps", "bpetrol", "toil"), result.map { it.id })
+    }
+
+    @Test
+    fun `within the same brand the cheapest comes first`() {
+        val stations = listOf(
+            station(id = "q8-caro", brand = "Q8", gplPrice = 0.79),
+            station(id = "q8-economico", brand = "Q8", gplPrice = 0.69),
+            station(id = "esso", brand = "Esso", gplPrice = 0.74)
+        )
+
+        val result = GplViewModel.applyFiltersAndSort(stations, FilterParams(sortMode = SortMode.BRAND), 0.0, 0.0)
+
+        assertEquals(listOf("esso", "q8-economico", "q8-caro"), result.map { it.id })
+    }
+
+    @Test
+    fun `sort by name ignores case and accents`() {
+        val stations = listOf(
+            station(id = "3", name = "Àvila Carburanti"),
+            station(id = "2", name = "beneco pompei"),
+            station(id = "1", name = "AGIP Sorrento")
+        )
+
+        val result = GplViewModel.applyFiltersAndSort(stations, FilterParams(sortMode = SortMode.NAME), 0.0, 0.0)
+
+        assertEquals(listOf("1", "3", "2"), result.map { it.id })
+    }
+
+    @Test
     fun `computeAvailableCities merges predefined provinces with detected cities without duplicates`() {
         val stations = listOf(station(id = "1", city = "Sorrento"), station(id = "2", city = "Sorrento"))
 

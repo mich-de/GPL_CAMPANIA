@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.example.data.local.GplDatabase
+import com.example.data.repository.GplItaliaRepository
 import com.example.data.repository.GplRepository
 import com.example.ui.screens.HomeScreen
 import com.example.ui.theme.GplTheme
@@ -30,7 +31,12 @@ class MainActivity : ComponentActivity() {
     private val viewModel: GplViewModel by viewModels {
         val database = GplDatabase.getDatabase(applicationContext)
         val repository = GplRepository(applicationContext, database.gplDao(), database.geocodeDao())
-        GplViewModel.Factory(repository, applicationContext)
+        val italiaRepository = GplItaliaRepository(
+            applicationContext,
+            database.nationalStatsDao(),
+            database.newsDao()
+        )
+        GplViewModel.Factory(repository, italiaRepository, applicationContext)
     }
 
     /** Chiede la posizione reale del device una sola volta; se non arriva o il permesso è negato, resta il fallback iniziale su Sorrento. */

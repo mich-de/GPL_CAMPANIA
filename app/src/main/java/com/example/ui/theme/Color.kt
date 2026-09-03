@@ -2,36 +2,36 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// === PRIMARY BRAND PALETTE ===
-val EcoGreenPrimary    = Color(0xFF007A53)   // dark emerald — primary action
-val EcoGreenSecondary  = Color(0xFF00A86B)   // lighter mint
-val FlameOrange        = Color(0xFFFF6F00)   // CTA / highlights
-val SorrentoBlue       = Color(0xFF0066CC)   // links / info
+// === PRIMARY BRAND PALETTE — steel blue / electric cyan, tono freddo e professionale ===
+val EcoGreenPrimary    = Color(0xFF14538C)   // steel blue — primary action
+val EcoGreenSecondary  = Color(0xFF1C8FBF)   // tech cyan-blue
+val FlameOrange        = Color(0xFFE8A93D)   // gold-amber — segnale, mai sfondo esteso
+val SorrentoBlue       = Color(0xFF2563EB)   // electric azure — link / info / azione
 
-// === LIGHT THEME SURFACES ===
-val EcoLightBackground = Color(0xFFF0F7F4)
-val EcoLightSurface    = Color(0xFFFFFFFF)
-val EcoLightSurfaceVar = Color(0xFFE8F3EE)
+// === LIGHT THEME SURFACES — mai bianco puro ===
+val EcoLightBackground = Color(0xFFF1F4FA)
+val EcoLightSurface    = Color(0xFFFAFBFE)
+val EcoLightSurfaceVar = Color(0xFFE6ECF7)
 
-// === DARK THEME SURFACES ===
-val EcoDarkBackground  = Color(0xFF0B1612)   // deep forest
-val EcoDarkSurface     = Color(0xFF152419)   // card background
-val EcoDarkSurfaceVar  = Color(0xFF1E3028)   // elevated card
+// === DARK THEME SURFACES — inchiostro blu-notte, mai nero puro ===
+val EcoDarkBackground  = Color(0xFF0A0E1B)   // deep space navy
+val EcoDarkSurface     = Color(0xFF121A2E)   // card background
+val EcoDarkSurfaceVar  = Color(0xFF1C2740)   // elevated card
 
 // === DARK THEME ACCENTS ===
-val PrimaryDark        = Color(0xFF3EDA98)   // bright mint on dark
-val SecondaryDark      = Color(0xFF80E6B9)
-val SurfaceDark        = Color(0xFF1B2B26)   // slightly elevated
+val PrimaryDark        = Color(0xFF4FC3F7)   // electric cyan on dark
+val SecondaryDark      = Color(0xFF81D4FA)
+val SurfaceDark        = Color(0xFF16203A)   // slightly elevated
 
-// === PRICE BADGE COLORS ===
-val PriceBadgeGreen    = Color(0xFF1B5E20)
-val PriceBadgeBg       = Color(0xFFE8F5E9)
-val PriceBadgeBorder   = Color(0xFFA5D6A7)
+// === PRICE BADGE COLORS — verde freddo (prezzo conveniente) ===
+val PriceBadgeGreen    = Color(0xFF0E7C5A)
+val PriceBadgeBg       = Color(0xFFE1F5EE)
+val PriceBadgeBorder   = Color(0xFF9CDBC3)
 
 // === SAVINGS BADGE ===
-val SavingsBadgeBg     = Color(0xFFFFF3E0)
-val SavingsBadgeFg     = Color(0xFFE65100)
+val SavingsBadgeBg     = Color(0xFFFCEFD8)
+val SavingsBadgeFg     = Color(0xFFB1690C)
 
 // === DARK SAVINGS BADGE ===
-val SavingsBadgeDarkBg = Color(0xFF3E2000)
-val SavingsBadgeDarkFg = Color(0xFFFFB74D)
+val SavingsBadgeDarkBg = Color(0xFF33270D)
+val SavingsBadgeDarkFg = Color(0xFFFFC66B)

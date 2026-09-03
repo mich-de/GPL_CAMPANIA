@@ -27,6 +27,7 @@ L'ultima lettura della fonte ufficiale ha prodotto **426 distributori GPL, tutti
 |---|---|
 | 🔎 **Prezzi ufficiali** | quelli comunicati dai gestori al MIMIT, con la data reale di comunicazione |
 | 🗺️ **Mappa OpenStreetMap** | via osmdroid, senza chiavi Google Maps |
+| 🟢 **Pin colorati per fascia** | verde/blu/rosso ricavati dai prezzi realmente in lista, non da soglie fisse |
 | 📍 **Ordinamento per distanza** | dal fix GPS del device o da una posizione impostata a mano |
 | ⭐ **Preferiti** | sopravvivono agli aggiornamenti, anche a un cambio di identificativi |
 | 🏙️ **Filtro per comune** | costruito dinamicamente sui dati realmente presenti |
@@ -34,6 +35,9 @@ L'ultima lettura della fonte ufficiale ha prodotto **426 distributori GPL, tutti
 | ✍️ **Segnalazione prezzo** | se trovi un prezzo diverso da quello pubblicato |
 | ➕ **Aggiunta distributore** | con geocoding reale dell'indirizzo che inserisci |
 | 📥 **Import POI** | file myLPG.eu in formato CSV o KML |
+| 🇮🇹 **GPL in Italia** | medie nazionali e classifica regionale calcolate dagli open data |
+| 📰 **Notizie carburanti** | dalla sala stampa del MIMIT, filtrate per argomento |
+| ⏳ **Scadenza serbatoio** | conto alla rovescia dalla data del tuo libretto, tutto sul device |
 | ✈️ **Funziona offline** | mostra l'ultimo dato reale salvato, senza inventare nulla |
 
 ## Il principio che guida tutto: solo dati reali
@@ -142,6 +146,39 @@ Gli id delle stazioni sono passati da `gpl_<provincia>_<hash>` (derivati dall'in
 
 Le segnalazioni di prezzo inserite dall'utente seguono la stazione sul nuovo id.
 
+## La mappa
+
+**A tutto schermo.** In modalità mappa spariscono barra del titolo, ricerca, filtri e i due FAB:
+occupavano circa un terzo dello schermo, e i FAB stavano nell'angolo in basso a destra, proprio dove
+finisce il pollice quando si pizzica per ingrandire. La mappa disegna anche sotto le barre di
+sistema; i suoi comandi restano dentro i margini di sistema per non finirci sotto. Si torna
+all'elenco con il pulsante in alto a sinistra o con il tasto indietro (che, se una scheda è aperta,
+prima chiude quella).
+
+Tile di OpenStreetMap tramite osmdroid, scalate alla densità reale dello schermo (senza, su un
+display 3×, le etichette delle strade risultano illeggibili). Ogni distributore con coordinate è un
+pin; l'attribuzione OSM e la barra della scala sono disegnate sulla mappa, come richiede la tile
+usage policy, alzate quanto basta a non finire sotto la barra di navigazione.
+
+**Il colore del pin dice una cosa sola, e verificabile.** Verde, blu e rosso sono il terzo più
+economico, quello centrale e quello più caro **dei distributori attualmente in lista** — filtri
+compresi. Le soglie non sono scritte nel codice: sono i terzili dei prezzi reali, e la legenda in
+alto a sinistra mostra i due valori esatti in €/L, così il colore si può controllare a occhio. Una
+soglia fissa avrebbe un'unica evoluzione possibile: dopo qualche mese di rincari dipinge di rosso
+tutta la regione senza che nulla sia davvero cambiato. Sotto i **6 prezzi** — o quando sono tutti
+uguali — non viene dichiarata nessuna fascia: i pin restano grigi e la legenda lo dice, perché
+"il terzo più economico" fra tre distributori è una statistica inventata.
+
+Toccando un pin si apre la **scheda in fondo alla mappa** (marca, indirizzo, distanza reale,
+prezzo con la sua fascia), non la finestra di dettaglio: quella copriva la mappa appena toccata e
+rendeva la scheda irraggiungibile. Da lì si sceglie *Indicazioni* o *Dettagli*; un tocco sulla
+mappa vuota toglie l'evidenza.
+
+La camera è dell'utente. La mappa si ricentra **una volta sola**, quando arriva la prima posizione
+reale (il fix GPS è asincrono, la mappa nasce prima sull'ultimo punto noto). Da lì in poi ogni
+aggiornamento GPS sposta solo il pallino blu: il tasto dedicato resta il modo per tornare sulla
+propria posizione, e ⛶ inquadra tutti i distributori mostrati.
+
 ## Il geocoding, ora un dettaglio
 
 `GeocodingEngine` resta nel progetto, ma **fuori dal percorso di refresh**: serve solo quando aggiungi a mano un distributore digitandone l'indirizzo. Prova fino a **7 strategie** su Nominatim, in ordine di precisione decrescente:
@@ -185,7 +222,7 @@ Senza keystore la configurazione di firma viene semplicemente saltata, così il 
 ./gradlew :app:testDebugUnitTest
 ```
 
-42 test unitari (Robolectric) su: scomposizione degli indirizzi reali, filtro GPL sulle risposte reali dell'API, mappatura verso Room, unione delle pompe iscritte due volte, migrazione dei preferiti, import POI, deduplica e logica di filtro/ordinamento.
+100 test unitari (Robolectric) su: scomposizione degli indirizzi reali, filtro GPL sulle risposte reali dell'API, mappatura verso Room, unione delle pompe iscritte due volte, migrazione dei preferiti, import POI, deduplica, logica di filtro/ordinamento, freschezza dei prezzi comunicati, parametri di diagnostica, tabella province → regioni, aggregazione nazionale, andamento sullo storico, parsing del feed RSS con il suo filtro per argomento, conti sulla scadenza del serbatoio e soglie di colore dei pin sulla mappa.
 
 ## Struttura
 
@@ -196,8 +233,13 @@ app/src/main/java/com/example/
 │   │   ├── CampaniaGplDataSource.kt       orchestratore: API → CSV → errore
 │   │   ├── OsservaprezziApiClient.kt      5 POST in parallelo, filtro GPL
 │   │   ├── MimitCsvFallback.kt            CSV in streaming, If-Modified-Since
+│   │   ├── MimitCsvRows.kt                lettura riga per riga, condivisa dai due usi del CSV
 │   │   ├── MimitAddressParser.kt          scomposizione dell'indirizzo
 │   │   ├── DuplicatePlantMerger.kt        unione delle pompe iscritte due volte
+│   │   ├── PriceFreshness.kt              da quanti giorni i prezzi sono stati comunicati
+│   │   ├── NationalGplStats.kt            medie nazionali e classifica regionale
+│   │   ├── ItalianRegions.kt              107 sigle di provincia → 20 regioni
+│   │   ├── MimitNewsFeed.kt               RSS della sala stampa, filtro per argomento
 │   │   └── RemoteGplStation.kt            modello comune alle due fonti
 │   ├── util/
 │   │   └── GeoDistance.kt                 distanza in metri fra due coordinate
@@ -206,11 +248,89 @@ app/src/main/java/com/example/
 │   │   ├── NominatimClient.kt             OkHttp, rate limit 1,1 s, backoff su 429
 │   │   ├── AddressCleaning.kt             normalizzazione indirizzi italiani
 │   │   └── GeocodeDao.kt / GeocodeCacheEntity.kt
-│   ├── local/       Room: GplDatabase, GplDao, BackendPreferences
+│   ├── local/       Room: GplDatabase, GplDao, BackendPreferences, Monitoring,
+│   │                NationalGplSnapshot (storico + andamento), NewsItem, TankRevision
 │   ├── model/       GplStation, UserPriceReport
-│   └── repository/  GplRepository — refresh, migrazione preferiti, import POI
-└── ui/              Compose: HomeScreen, dialoghi, mappa, ViewModel
+│   └── repository/
+│       ├── GplRepository.kt               refresh, migrazione preferiti, import POI
+│       └── GplItaliaRepository.kt         numeri nazionali, notizie, scadenza serbatoio
+└── ui/
+    ├── components/
+    │   ├── InteractiveMapView.kt          mappa osmdroid, pin, legenda, scheda
+    │   ├── MapPriceTiers.kt               terzili dei prezzi in lista → colore del pin
+    │   └── …                              dialoghi, calcolatore, GPL in Italia
+    ├── screens/     HomeScreen
+    └── viewmodel/   GplViewModel
 ```
+
+## GPL in Italia
+
+Il mappamondo nella barra in alto apre tre cose che rispondono a domande che la lista dei
+distributori non può soddisfare. Tutte e tre rispettano la stessa regola del resto dell'app: **niente
+parte da solo e niente è stimato.**
+
+### I numeri
+
+Media e mediana nazionali del GPL, classifica delle 20 regioni dalla più economica alla più cara, e
+la posizione della Campania nel confronto. Sono calcolate dagli **stessi due CSV open data** già usati
+come fallback: la lettura riusa lo stesso codice di streaming (`MimitCsvRows.kt`), ma tiene l'Italia
+intera invece delle sole cinque province.
+
+Costa ~7,5 MB non comprimibili, quindi **non parte mai da sola**: si scarica quando lo chiedi, e non
+si riscarica se la pubblicazione di oggi è già sul device — la fonte esce una volta la mattina, verso
+le 06:45 UTC.
+
+Gli impianti con un prezzo GPL valido ma con la colonna `Provincia` scritta fuori formato
+nell'anagrafica ufficiale (nella pubblicazione del 10/08/2026 sono 19 su 4.599) **non vengono
+attribuiti a una regione a caso**: restano fuori dalle medie e il loro numero è mostrato in chiaro.
+
+### L'andamento
+
+La fonte pubblica solo la situazione di stamattina: non esiste una serie storica da scaricare.
+L'unico modo onesto di dire "−1,2% in una settimana" è **aver salvato la fotografia di una settimana
+fa**, ed è ciò che l'app fa — una riga per giorno di pubblicazione reale nella tabella
+`national_gpl_snapshots`, mai un giorno interpolato per riempire un buco.
+
+Finché non esiste una lettura abbastanza vecchia, l'andamento **non viene mostrato**. Quando esiste,
+il confronto usa la lettura più recente fra quelle abbastanza lontane e porta con sé i giorni
+effettivi di distanza: se manca il giorno esatto di sette giorni fa, l'app scrive "9 giorni fa" invece
+di arrotondare a "una settimana".
+
+### Notizie
+
+Il feed RSS della [sala stampa del MIMIT](https://www.mimit.gov.it/it/notizie-stampa) (~9 KB),
+filtrato sulle parole che identificano una notizia sui carburanti. È la sala stampa **generale** del
+ministero, dove la gran parte delle voci parla d'altro: è quindi normale che per settimane non ci sia
+niente da mostrare, e in quel caso l'app **lo dice** invece di riempire lo spazio.
+
+Titoli e sommari sono quelli del ministero, non riassunti né riscritti; toccare una notizia apre la
+pagina originale.
+
+### La scadenza del serbatoio
+
+Un serbatoio GPL per autotrazione vale **dieci anni** (Regolamento UNECE n. 67) e, scaduto, non fa
+passare la revisione periodica.
+
+La data la inserisci tu, leggendola dal libretto o dalla punzonatura sul serbatoio: **l'app non la
+ricava dalla targa e non la indovina**, e senza data non mostra nessun conto alla rovescia. Se
+inserisci la data di collaudo o di prima immatricolazione, l'app *propone* la scadenza a +10 anni —
+una proposta modificabile, perché in caso di discordanza vince quello che è scritto sul libretto. Il
+preavviso è di 90 giorni, perché le officine autorizzate alla sostituzione hanno spesso settimane di
+attesa.
+
+Il dato resta in `SharedPreferences` sul telefono e non viene inviato da nessuna parte.
+
+## Diagnostica
+
+*Impostazioni → Diagnostica* apre un pannello che dice **come sta funzionando l'app**, non cosa
+contiene: esito e durata dell'ultimo tentativo di aggiornamento, quale delle due fonti ufficiali ha
+risposto, stato della cache di 15 minuti, conteggi letti da Room (totali, da fonte ufficiale,
+aggiunti a mano, preferiti, segnalazioni, senza coordinate) e la qualità dell'ultimo scarico
+(doppioni uniti, e da quanti giorni i gestori hanno comunicato i prezzi).
+
+La diagnostica dell'ultimo tentativo è persistita, quindi un aggiornamento fallito ieri sera è
+ancora leggibile stamattina. Un valore mai misurato si legge `—`, mai `0`. Le tre azioni disponibili
+— riscaricare, far scadere la cache, copiare il rapporto — non cancellano nulla.
 
 Convenzione sugli id, che determina cosa sopravvive a un refresh:
 
@@ -227,10 +347,13 @@ Convenzione sugli id, che determina cosa sopravvive a un refresh:
 - **Segnalazioni prezzo e distributori aggiunti sono locali al device**, non condivisi con altri utenti.
 - I prezzi sono quelli **comunicati dai gestori** al ministero, con la data di comunicazione mostrata in app. Un gestore che non aggiorna resta pubblicato con la sua data vecchia.
 - L'app mostra **solo il GPL**, per scelta, anche se la fonte fornisce tutti i carburanti.
+- **L'andamento nazionale non è disponibile subito**: si costruisce sulle fotografie che l'app stessa conserva, quindi il confronto a 7 giorni compare dopo una settimana di letture e quello a 30 dopo un mese. È una conseguenza della fonte, che pubblica solo la giornata corrente, e non si aggira con una stima.
+- **Le notizie dipendono da cosa scrive il ministero**: la sala stampa è generale, e in molte settimane non contiene nulla sui carburanti.
 
 ## Attribuzioni e rispetto delle policy
 
-- **Prezzi e anagrafica impianti**: [Osservaprezzi carburanti](https://carburanti.mise.gov.it/) del **MIMIT** — Ministero delle Imprese e del Made in Italy. Gli open data sono pubblicati fra i [dataset del ministero](https://www.mimit.gov.it/it/open-data) (`images/exportCSV/prezzo_alle_8.csv` e `images/exportCSV/anagrafica_impianti_attivi.csv`). Consultati alla frequenza di un utente umano: TTL 15 minuti, 5 richieste per aggiornamento, `User-Agent` identificativo con URL del progetto.
+- **Prezzi e anagrafica impianti**: [Osservaprezzi carburanti](https://carburanti.mise.gov.it/) del **MIMIT** — Ministero delle Imprese e del Made in Italy. Gli open data sono pubblicati fra i [dataset del ministero](https://www.mimit.gov.it/it/open-data) (`images/exportCSV/prezzo_alle_8.csv` e `images/exportCSV/anagrafica_impianti_attivi.csv`). Consultati alla frequenza di un utente umano: TTL 15 minuti, 5 richieste per aggiornamento, `User-Agent` identificativo con URL del progetto. Le medie nazionali rileggono gli stessi due CSV al massimo una volta al giorno e solo su richiesta esplicita.
+- **Notizie**: feed RSS della sala stampa del MIMIT (`mimit.gov.it/it/notizie-stampa?format=feed&type=rss`), letto solo quando l'utente lo chiede. Titoli e sommari sono ripubblicati come sono, con il link alla pagina originale sempre in vista.
 - **Dati geografici**: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, [ODbL](https://opendatacommons.org/licenses/odbl/).
 - **Geocoding**: [Nominatim](https://nominatim.org/). L'app rispetta la [usage policy](https://operations.osmfoundation.org/policies/nominatim/): massimo 1 richiesta/secondo, `User-Agent` identificativo con URL del progetto, cache permanente per non ripetere richieste, backoff esplicito sull'HTTP 429.
 - **Tile della mappa**: server tile di OSM tramite osmdroid, secondo la [tile usage policy](https://operations.osmfoundation.org/policies/tiles/): `User-Agent` identificativo e cache su disco per non riscaricare gli stessi tile.
