@@ -376,7 +376,13 @@ fun HomeScreen(
                         focusedContainerColor = Color.White,
                         unfocusedContainerColor = Color.White,
                         focusedBorderColor = Color.Transparent,
-                        unfocusedBorderColor = Color.Transparent
+                        unfocusedBorderColor = Color.Transparent,
+                        // Il container resta bianco fisso in entrambi i temi: il colore del testo
+                        // deve restare scuro fisso, altrimenti in dark mode eredita il testo chiaro
+                        // del tema e diventa illeggibile su sfondo bianco.
+                        focusedTextColor = Color(0xFF0C1526),
+                        unfocusedTextColor = Color(0xFF0C1526),
+                        cursorColor = EcoGreenPrimary
                     ),
                     singleLine = true,
                     modifier = Modifier
