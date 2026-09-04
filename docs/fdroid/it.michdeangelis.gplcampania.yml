@@ -21,6 +21,10 @@
 #    NON stanno in questo file: li ho già preparati in
 #    fastlane/metadata/android/{it-IT,en-US}/ nel repo GPL_CAMPANIA — F-Droid
 #    li legge da lì automaticamente al momento della build, non serve altro.
+# 7. Build riproducibile (Binaries/AllowedAPKSigningKeys): prima di aprire/
+#    aggiornare la MR, pubblica una GitHub Release per il tag v1.1.2 con
+#    allegato l'APK firmata chiamata esattamente "app-release.apk" (generata
+#    con build-signed-release.bat) — l'URL in "Binaries" deve puntare lì.
 #
 # Guida ufficiale completa:
 # https://f-droid.org/docs/Submitting_to_F-Droid_Quick_Start_Guide/
@@ -38,6 +42,9 @@ AutoName: GPL Campania
 
 RepoType: git
 Repo: https://github.com/mich-de/GPL_CAMPANIA.git
+
+Binaries: https://github.com/mich-de/GPL_CAMPANIA/releases/download/v%v/app-release.apk
+AllowedAPKSigningKeys: c086d0f09832cc9855fdaa0ddcdbaa049fe58fa7fcf1c74a3890d8836d79a7be
 
 Builds:
   - versionName: 1.1.2

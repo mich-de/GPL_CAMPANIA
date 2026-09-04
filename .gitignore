@@ -21,6 +21,9 @@ local.properties
 debug.keystore
 *.jks
 *.keystore
+generate-keystore.bat
+show-keystore-fingerprint.bat
+build-signed-release.bat
 
 # Strumenti locali
 .claude/
