@@ -42,9 +42,7 @@ AutoName: GPL Campania
 
 RepoType: git
 Repo: https://github.com/mich-de/GPL_CAMPANIA.git
-
 Binaries: https://github.com/mich-de/GPL_CAMPANIA/releases/download/v%v/app-release.apk
-AllowedAPKSigningKeys: c086d0f09832cc9855fdaa0ddcdbaa049fe58fa7fcf1c74a3890d8836d79a7be
 
 Builds:
   - versionName: 1.1.2
@@ -53,6 +51,8 @@ Builds:
     subdir: app
     gradle:
       - yes
+
+AllowedAPKSigningKeys: c086d0f09832cc9855fdaa0ddcdbaa049fe58fa7fcf1c74a3890d8836d79a7be
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
