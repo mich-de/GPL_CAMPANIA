@@ -42,7 +42,7 @@ Repo: https://github.com/mich-de/GPL_CAMPANIA.git
 Builds:
   - versionName: 1.1.2
     versionCode: 4
-    commit: v1.1.2
+    commit: 4f22556ee5aa4e6685c97968ed756603d4d7423a
     subdir: app
     gradle:
       - yes
