@@ -13,10 +13,18 @@ android {
     applicationId = "it.michdeangelis.gplcampania"
     minSdk = 24
     targetSdk = 36
-    versionCode = 4
-    versionName = "1.1.2"
+    versionCode = 5
+    versionName = "1.1.3"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+  }
+
+  // F-Droid segnala come sospetto qualunque blocco di firma extra non standard: questo blocco
+  // "Dependency metadata" (pensato per la Play Console di Google) incorpora nell'APK firmata
+  // l'elenco delle dipendenze, dato non necessario fuori da Google Play.
+  dependenciesInfo {
+    includeInApk = false
+    includeInBundle = false
   }
 
   // La firma di release è opzionale: senza keystore il progetto resta clonabile e compilabile

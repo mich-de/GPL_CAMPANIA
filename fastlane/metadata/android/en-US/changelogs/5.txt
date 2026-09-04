@@ -1,0 +1,1 @@
+Version 1.1.3: removed the "Dependency metadata" block from the APK, a data block meant for Google Play Console and not needed outside Google Play. No other changes from 1.1.2 (Play-Services-free location, prices never fabricated, brand filter, new color theme).
