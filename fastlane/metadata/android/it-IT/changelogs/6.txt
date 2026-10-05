@@ -1,0 +1,1 @@
+Versione 1.1.4: abilitati R8 e lo shrink delle risorse nella build di release, su richiesta della revisione F-Droid — APK più piccola, nessun cambiamento di comportamento rispetto alla 1.1.3.
